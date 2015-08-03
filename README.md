@@ -1,4 +1,4 @@
-# PHPTracker 0.0.1 alpha
+# PHPTorrent 0.0.1 alpha
 
 ## Config
 
