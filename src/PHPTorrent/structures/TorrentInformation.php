@@ -33,9 +33,10 @@ class TorrentInformation{
     public $piece_length;
     
     /**
-     * The Pieces that this torrent have and don't have in the form of bits.
+     * The Pieces that you have and don't have in the form of bits.
      * 1 = have, 0 = don't have.
-     * @var binarystring
+     *
+     * @var BitArray
      */
     public $bitfield;
     

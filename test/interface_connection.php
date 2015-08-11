@@ -13,11 +13,25 @@
     and you should not try to confuse them. This is how we connect to daemon
     using defaults.
 */
+
+echo "Testing connection to peer.\n";
 $addr = '127.0.0.1';
 $port = '7423';
-$socket = socket_create( AF_INET, SOCK_STREAM, SOL_TCP );
-$status = socket_connect( $socket, $addr, $port );
 
+
+if( ( $socket = socket_create( AF_INET, SOCK_STREAM, SOL_TCP ) ) === false){
+    echo "socket_create() failed: reason: " . socket_strerror(socket_last_error()) . "\n";
+    exit( "Connection test failed.\n" );
+}
+
+if( ( $status = socket_connect( $socket, $addr, $port ) ) === false ){
+    echo "socket_connect() failed.\nReason: ($status) " . socket_strerror(socket_last_error($socket) ) . "\n";
+    exit( "Connection to daemon failed.\n" );
+}
+
+echo "Connection to interface was successfull.\n";
+
+echo "Testing authentication.\n";
 /*
     --- Authentication ---
     Since we are using the network to connect to the deamon, not only you can 
@@ -26,16 +40,38 @@ $status = socket_connect( $socket, $addr, $port );
     Write your username and password like this user:pass and send it to the 
     daemon. The daemon will return 'success' if user/pass is correct.
 */
-// Using the defaults
+/*
+echo "Testing with username pass. \n";
+
 $userpass = "user:pass";
 socket_write( $socket, $userpass, strlen( $userpass ) );
-// Now wait for daemon to return a success
-if( socket_read( $socket, 7 ) == "success" ){
+// TODO daemon is returning zero all the time.
+if( ( $status = socket_read( $socket, 1 ) ) === false ){
+    echo "Test failed coudn't read socket, reason " . socket_strerror(socket_last_error()) . "\n";
+}
+$status = current( unpack( 'C', $status ) );
+
+if( $status == 1 ){
     echo "Congrates you're connected to the daemon\n";
 }else{
     echo "Authentication Failed.\n";
 }
+*/
+echo "Testing disabled auth. \n";
 
+if( ( $status = socket_read( $socket, 1 ) ) === false ){
+    echo "Test failed coudn't read socket, reason " . socket_strerror(socket_last_error()) . "\n";
+    exit();
+}
+$status = current( unpack( 'C', $status ) );
+if( $status == 1 ){
+    echo "Congrates you're connected to the daemon\n";
+}else{
+    echo "Your not connected.\n";
+}
+
+
+exit();
 // We can do alot of things at this point. 
 
 

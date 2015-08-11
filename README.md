@@ -1,6 +1,21 @@
-# PHPTracker 0.0.1 alpha
+# PHPTracker 0.0.02 alpha
+
+## About
+
+This is BitTorrent client based on the PHP(5.4) language.
+The torrent has a lot of work to be done on it; however, for
+simple leeching/seeding it should work. I am interested in any
+help from the community.
+
+Check out tcz/PHPTracker for all your tracker needs.
 
 ## Config
+
+For now the only options you should be concerned about is the 
+CLIENT_DATABASE_LOCATION and LOGFILE_LOCATION config options in the config/config.php.
+Set these options to your perfered locatations.
+
+You can tweek the rest of the config if you want.
 
 ...
 
@@ -42,6 +57,9 @@ if( socket_read( $socket, 7 ) == "success" ){
 }else{
     echo "Authentication Failed.\n";
 }
+
+Note, an empty string for the username disables authentication.
+
 ```
 
 ### Adding a torrent

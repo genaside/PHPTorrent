@@ -28,7 +28,7 @@ class AnnounceInformation{
      * Time of announcement
      * @var Timestamp
      */
-    public $last_access_time;    
+    public $last_access_time = 0;    
     
     /**
      * The status of the connectivity of the tracker

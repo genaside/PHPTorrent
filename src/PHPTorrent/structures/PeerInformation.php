@@ -92,7 +92,7 @@ class PeerInformation{
      * 1 = have, 0 = don't have.
      * @var array(Binary)
      */
-    public $bitfield;    
+    public $bitfield = null;    
     
     /* ----- Statistical ----- */    
     
@@ -160,18 +160,31 @@ class PeerInformation{
      * Status of peer's choke on client
      * @var Bool
      */
-    public $choke_client = true; // by defualt choke is enable
+    public $choked_client = true; // by defualt choke is enable
     
     /**
      * Status of client choke on peer
      * @var Bool
      */
-    public $choke_peer = true; // by defualt choke is enable
+    public $choked = true; // by defualt choke is enable
+    
+    /**
+     * This peer is interested in a torrent mangaged by Daemon
+     * @var Bool
+     */
+    public $interested_in_client = false;
+    
+    /**
+     * The torrent mangaged by the daemon is interested in the peer
+     * @var Bool
+     */
+    public $client_interested = false;
     
     /* ----- Other Timers ----- */
     
     /**
      * Time of sent interedted message
+     * @deprecated
      * @var Interger
      */
     public $last_interested_time = 0;    

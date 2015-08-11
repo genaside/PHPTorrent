@@ -1,0 +1,18 @@
+version 0.0.02 alpha 
+---------------------
+- Move the current folder contents in /src to /src/PHPTorrent
+- Fixed some spelling and grammer issues in config.php.
+- Added licence
+- Now authentication can be disable if user name is an empty string
+- Added length limits to username and password in config.php, now the 
+  lengths are tested first during the authentication.
+- *Now during interface connects, daemon will return a char equaling 1
+  instead of 'success', and 0 for failed.
+- Added a third party libary 'SpectrumLib', and because of that library I had to alter  
+  bitfield managment logic.
+- According to specs, peers that has the resrved bits filled, they get diconnected.
+  That feature has been added.
+- Fixed the problem where one peer is working while others stall.
+- fixed logger, amd all echo are replaced with logger.
+- Added a feature that a user can set up scripts for when the torrent finishes.
+- Other

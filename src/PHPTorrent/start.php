@@ -24,6 +24,9 @@ require_once( __DIR__ . "/structures/PeerInformationList.php" );
 
 require_once( __DIR__ . "/logger/logger.php" );
 
+// Third party software
+require_once( __DIR__ . "/../../includes/SpectrumLib/BitArray.php" );
+
 // start Daemon and detach,
 //passthru( "php ./daemon/daemon.php" );
 

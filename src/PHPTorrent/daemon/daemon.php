@@ -23,6 +23,10 @@ class Daemon{
     // Version of the program
     const PROGRAM_VERSION = "0.0.1";
     
+    // Other constance
+    const SUCCESS = 1;
+    const FAILURE = 0;
+    
     /**
      * A randomly created ID
      * @note each time the deamon starts you'll get a completly different id each time.
@@ -89,17 +93,16 @@ class Daemon{
      */
     public function start(){
         // initialize various components 
-        logger::logMessage( self::PROGRAM_NAME, Logger::STATUS, "Started BitTorrent Client" );                 
+        logger::logMessage( self::PROGRAM_NAME, Logger::STATUS, "Started PHPTorrent, the bittorrent client." );   
+        
         $this->initializeID();       
         $this->initializePort();
         $this->initializeInterface();        
-        $this->initializeDatabase();
-        
+        $this->initializeDatabase();        
        
         // Run Main Loop, where all the magic happens
         $this->mainLoop();
-    }
-    
+    }    
     
     
     /**
@@ -159,7 +162,7 @@ class Daemon{
                         $this->port = $socket;                        
                         logger::logMessage( self::PROGRAM_NAME, Logger::STATUS, "Created and binded port $i" );
                         return;                        
-                    }                                  
+                    }                                
                 }               
             }else{               
                 if( $socket = $create_server_socket( $value ) ){
@@ -186,18 +189,20 @@ class Daemon{
         //$socket = @socket_create( AF_INET, SOCK_STREAM, SOL_TCP );
         
         if( $socket = @socket_create( AF_INET, SOCK_STREAM, SOL_TCP ) ){
-            if( @socket_bind( $socket, '127.0.0.1', Config::CLIENT_INTERFACE_PORT ) ){
-                if( @socket_listen( $socket ) ){
+            if( socket_bind( $socket, '127.0.0.1', Config::CLIENT_INTERFACE_PORT ) ){
+                if( socket_listen( $socket ) ){
                     //socket_set_nonblock( $socket );
                     $this->interface_conn = $socket;
-                    logger::logMessage( self::PROGRAM_NAME, Logger::STATUS, "Created and binded interface port" );
+                    $port = Config::CLIENT_INTERFACE_PORT;
+                    logger::logMessage( self::PROGRAM_NAME, Logger::STATUS, "Created and binded interface port, $port." );
                     return;
                 }
             }                
         }
         
         // At this point no sockets were created
-        logger::logMessage( self::PROGRAM_NAME, Logger::CRITICAL, "Creation and Binding of iterface port failed" );         
+        logger::logMessage( self::PROGRAM_NAME, Logger::WARNING, "Creation and Binding of iterface port failed" );        
+        exit();
     }
     
     
@@ -219,20 +224,20 @@ class Daemon{
         }catch( Exception $e ){
             $error_msg = $this->db_conn->lastErrorMsg();
             logger::logMessage( self::PROGRAM_NAME, Logger::CRITICAL, $error_msg );  
-            return false;
+            exit();
         }
         
         if( !$this->db_conn->busyTimeout( 1 ) ){
             $error_msg = $this->db_conn->lastErrorMsg();
             logger::logMessage( self::PROGRAM_NAME, Logger::WARNING, $error_msg );
-        } 
-        
+            // TODO to exit or not to exit, that is the question.
+        }         
         
         $status = $this->db_conn->exec( 'PRAGMA foreign_keys = ON;' );
         if( !$status ){
             $error_msg = $this->db_conn->lastErrorMsg();
             logger::logMessage( self::PROGRAM_NAME, Logger::CRITICAL, $error_msg );
-            return false;
+            exit();
         }
         
         $status = $this->db_conn->exec( "
@@ -278,7 +283,7 @@ class Daemon{
         if( !$status ){
             $error_msg = $this->db_conn->lastErrorMsg();
             logger::logMessage( self::PROGRAM_NAME, Logger::CRITICAL, $error_msg );  
-            return false;
+            exit();
         }
         
         logger::logMessage( self::PROGRAM_NAME, Logger::STATUS, "Database ok:" . Config::CLIENT_DATABASE_LOCATION );
@@ -299,11 +304,8 @@ class Daemon{
         $last_stat_update_time = time(); //  
         $have_arr = array(); // { info_hash|index }
         
-        //
-        $my_port_number; // this is our port number
-        $my_addr; // this is our ip address
-        socket_getsockname( $this->port, $my_addr, $my_port_number );
-        
+        //        
+        socket_getsockname( $this->port, $my_addr, $my_port_number );        
     
         while( $this->is_running_flag ){   
             // Proccess commands in the queue first.
@@ -312,15 +314,23 @@ class Daemon{
             if( $torrent_info_list->isEmpty() ){    
                 // There are no torrents to work on
                 // dont need to overwork the CPU for an empty list, sleeping for a little bit.
-                sleep( 2 ); 
+                $msg = "There are no torrents for the client to work on.";
+                logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );                 
+                // We dont want to use up the cpu
+                sleep( 5 ); 
                 continue;
             } 
             
             // For each running torrent, 
             foreach( $torrent_info_list as &$torrent_info ){
                 if( is_null( $torrent_info->bitfield ) ){
-                    // Hash check file(s) if havent already done so
-                    $torrent_info->bitfield = Storage::fullHashCheck( $torrent_info );  
+                    // Hash check file(s) if havent already done so, and  set bitfield with it
+                    $torrent_info->bitfield = new BitArray( strlen( $torrent_info->pieces ) / 20 );
+                    
+                    $msg = "Checking the hash of file(s) for torrent {$torrent_info->info_hash}...";
+                    logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );                     
+                    
+                    $torrent_info->bitfield->assignBinaryString( Storage::fullHashCheck( $torrent_info ) );                    
                     // calculate bytes remaining
                     $torrent_info->bytes_left = $this->BytesLeft( $torrent_info );
                 }  
@@ -328,22 +338,17 @@ class Daemon{
                 $ctime = time(); 
                 
                 // For each announce url
-                foreach( $torrent_info->announce_infos as $key=>$announce_info ){        
-                    if( isset( $announce_info->last_access_time ) ){
-                        if( $ctime - $announce_info->last_access_time < $announce_info->interval ){                            
-                            // Not within tracker's time interval
-                            //echo $announce_info->url;
-                            continue;
-                        }   
-                    }
-                    
+                foreach( $torrent_info->announce_infos as $key=>$announce_info ){                         
+                    if( $ctime - $announce_info->last_access_time < $announce_info->interval ){                            
+                        // Not within tracker's time interval                       
+                        continue;
+                    }                   
                     
                     $url_comp = parse_url( $announce_info->url );                    
-                    $tracker_response;
-        
+                            
                     if( $url_comp[ "scheme" ] == "http" || $url_comp[ "scheme" ] == "https" ){                                            
                         if( !$announce_info->is_connected ){  
-                            // Http(s) tracker is trying to connect
+                            // Http(s) tracker has to connect
                             if( $announce_info->number_of_failed_connections > 0 ){ 
                                 $announce_info->last_access_time = $ctime;
                                 $announce_info->interval = 3600;
@@ -435,28 +440,36 @@ class Daemon{
                 }                 
             }
                          
-            $this->handleIncomingPeerConnection( $peer_info_list );             
                          
-            foreach( $peer_info_list as $key=>&$peer_info ){      
-                // Handle each peer
+            $this->handleIncomingPeerConnection( $peer_info_list );             
+            
+            $failed_connects = 0;
+            // Handle each peer
+            foreach( $peer_info_list as $key=>&$peer_info ){                
                 if( is_null( $peer_info ) ){
-                    // sometime thins gets set to null
+                    // A peer was nulled out, get rid of it
                     unset( $peer_info_list[ $key ] );   
                     continue;
                 }
-               
+                
                 $torrent_info = $torrent_info_list->findUsingInfoHash( $peer_info->info_hash );  
                 
+                //if( $torrent_info->bitfield == $peer_info->bitfield ){
                 if( $torrent_info->bitfield == $peer_info->bitfield ){
-                    // neither of us can gain from each other because we have piece                   
-                    unset( $peer_info_list[ $key ] );  
+                    // neither of us can gain from each other because we have the pieces                        
+                    unset( $peer_info_list[ $key ] );                      
                     continue;
-                }
+                }   
                 
-                if( !$this->handleNewPeerConnection( $peer_info_list, $peer_info, $torrent_info ) ){
+                // TODO
+                if( !$this->handleNewPeerConnection( $peer_info_list, $peer_info, $torrent_info ) ){ 
+                    
                     // not ready
                     if( is_null( $peer_info ) ){
                         unset( $peer_info_list[ $key ] );                       
+                    } 
+                    if( $failed_connects++ > 2 ){
+                        break;
                     }                    
                     continue;
                 }
@@ -467,27 +480,35 @@ class Daemon{
                     unset( $peer_info_list[ $key ] );                    
                     continue;
                 }                
-                  
-                $this->receiveRequests( $torrent_info, $peer_info, $have_arr );
+                
+                $this->receiveRequests( $torrent_info, $peer_info, $have_arr );                
                 if( is_null( $peer_info ) ){ continue; }
                 
                 
-                if( $torrent_info->bytes_left != 0 ){
-                    // only make requests if we need data,
+                // When is it a good time to make requests?
+                // * Missing pieces( peer must have bifield, client  )
+                // * Peer has piecies we don't have
+                // * Peer has unchoked us
+                if( $torrent_info->bytes_left != 0/* && !is_null( $peer_info->bitfield )*/ ){
+                    // We don't have all the pieces, and we can move on using peer's bitfield     
+                    // Check to see if peer has a piece we don't have                     
                     $this->makeRequests( $torrent_info, $peer_info );  
                 }
+                
                 
                 
                                                
                 // Keep alive if no socket read/read is happening
                 // NOTE according to the spec keep alive is sent when 2 min of inactivity occurs
-                // TODO
+                
+                /*
                 $ctime = time();
                 if( $ctime - $peer_info->last_download_time > 120 &&
                     $ctime - $peer_info->last_upload_time > 120
                 ){
                     $this->messageKeepAlive( $peer_info );                    
                 }
+                */
                                 
             }
             
@@ -520,6 +541,9 @@ class Daemon{
                 // Add statistics to database
                 $this->addStatisticsToDatabase( $torrent_info_list );
                 $last_stat_update_time = $ctime;
+                
+                $msg = "Updated Database.";
+                logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg ); 
             }
             
            
@@ -541,23 +565,19 @@ class Daemon{
      */
     private function handleIncomingPeerConnection( PeerInformationList $peer_info_list ){
         $read = array( $this->port );
-        $write = null;
-        $except = null;
-                        
+        
         if( socket_select( $read, $write, $except, 0 ) > 0 ){
-            $peer_socket = socket_accept( $this->port ); 
-            
-            $addr;
-            $port;
+            $peer_socket = socket_accept( $this->port );           
             socket_getpeername ( $peer_socket, $addr, $port );                               
             
-            // Remove duplicates from lists
+            // find duplicates in peer list
             foreach( $peer_info_list as $key=>$peer_info ){
                 if( $peer_info->address == $addr && $peer_info->port == $port ){
                     // Found a dup
+                    
                     if( $peer_info->partially_connected || $peer_info->is_connected ){
-                        // We got a dup that has a it's socket running already.
-                        break 2;                            
+                        // We got a dup that has a socket connecting or connected already.
+                        return;                            
                     }else{
                         // Dup probably used as peer in reserve, we can get rid of it
                         unset( $peer_info_list[ $key ] );
@@ -565,7 +585,8 @@ class Daemon{
                 }               
             }
             
-            // Make sure where in the limits of config.php                
+            /*
+            // Make sure we're in the limits of config.php                
             $farr = array_filter( $peer_info_list->toArray(), function( $element ) use( $peer_info ){                    
                 if( $element->is_connected || $element->is_connecting ){                     
                     if( $element->info_hash == $peer_info->info_hash ){
@@ -578,10 +599,16 @@ class Daemon{
                 // Max number of connection already reached for this torrent. Leave the unconnected peer for later use.           
                 break;
             }   
+            */           
+            if( !( $handshake = $this->recieveHandShake( $peer_socket ) ) ){
+                return;
+            }
             
-            // ok ready
-                            
             $peer_info = new PeerInformation;
+            $peer_info->peer_id = $handshake->peer_id; // 
+            $peer_info->info_hash = $handshake->info_hash;  //                       
+            $peer_info->received_handshake = true;  
+            
             // This peer is already deamed partially connected.       
             $peer_info->is_connecting = true;
             $peer_info->is_partially_connected = true;
@@ -634,7 +661,9 @@ class Daemon{
             // Attempt to connect to socket
             while( !( $result = @socket_connect( $peer_info->resource, $peer_info->address, $peer_info->port ) ) ){                
                 if( ( time() - $peer_info->conection_timeout ) >= Config::PEER_CONNECTION_TIMEOUT ){     
-                    echo "Connection to peer {$peer_info->address}:{$peer_info->port} timed out,\n";                    
+                    $msg = "Connection to peer {$peer_info->address}:{$peer_info->port} timed out on socket.";
+                    logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );
+                                                      
                     $peer_info->is_connecting = false;    
                     socket_close( $peer_info->resource ); // NOTE do i need this?
                     $peer_info = null;
@@ -665,7 +694,9 @@ class Daemon{
                     if( ($test = socket_select( $read, $write, $except, 0 )) == 1 ){                        
                         $handshake = $this->recieveHandShake( $peer_info->resource );
                         if( !$handshake ){
-                            echo "Peer {$peer_info->address}:{$peer_info->port} connection failed cuase of handshake,\n";
+                            $msg = "Connection to peer {$peer_info->address}:{$peer_info->port} timed out on handshake.";
+                            logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );
+                            
                             socket_close( $peer_info->resource );                            
                             $peer_info = null;
                             return false;
@@ -688,7 +719,10 @@ class Daemon{
                 
             }else{
                 // Everthing is ok   
-                echo "Peer {$peer_info->peer_id}:{$peer_info->address}:{$peer_info->port} connected successfully,\n";   
+                $client_id = substr( $peer_info->peer_id, 0, 8 );
+                $msg = "Peer {$client_id}:{$peer_info->address}:{$peer_info->port} connected successfully.";
+                logger::logMessage( self::PROGRAM_NAME, Logger::STATUS, $msg );                
+                
                 $peer_info->is_connected = true;
                 $peer_info->is_connecting = false;    
                 $peer_info->is_partially_connected = false;
@@ -699,7 +733,7 @@ class Daemon{
         }      
         
         if( $peer_info->is_connected ){
-            // We are fully conected meaning socket is connected and handshake was successfull
+            // We are fully conected meaning socket is connected and handshake was successfull            
             return true;
         }
         
@@ -707,95 +741,115 @@ class Daemon{
     }
     
     
-    
+    /**
+     * Function to recive peers requests/messages
+     */
     private function receiveRequests( TorrentInformation &$torrent_info, PeerInformation &$peer_info, &$have_arr ){
         $read = array( $peer_info->resource );
-        $write = null;
-        $except = null;
         
-        while( socket_select( $read, $write, $except, 0 ) == 1 ){
-            if( socket_recv( $peer_info->resource, $data, 256, MSG_DONTWAIT ) === false ){
-                // error on socket
+        if( socket_select( $read, $write, $except, 0 ) == 1 ){ 
+            if( socket_recv( $peer_info->resource, $data, 4096, MSG_DONTWAIT ) === false ){
+                // error on socket                
                 socket_close( $peer_info->resource );
                 return;                
             }else{
-                $peer_info->buffer .= $data;
+                $peer_info->buffer .= $data;                
             }
         }
         
         // This if statement is to check the first 4 bytes to determine the rest of the message length 
         if( strlen( $peer_info->buffer ) >= 4 ){
             $message_len = current( unpack( 'N', substr( $peer_info->buffer, 0, 4 ) ) );     
-            $full_message_len = $message_len + 4;            
+            $full_message_len = $message_len + 4;        
+            
+            //echo $message_id . ",";
             if( strlen( $peer_info->buffer ) < $full_message_len ){ 
                 // we don't have the WHOLE message inorder to contine                
                 return;
             }else{            
                 // now we have the entire message we can proceed                
-                $message_len = current( unpack( 'N', $this->bufferRead( $peer_info, 4 ) ) );
-                $message_id = current( unpack( 'C', $this->bufferRead( $peer_info, 1 ) ) );                
-                //$message = $this->dataRead( $peer_info, $message_len - 1 );
-                //echo "[ $message_len | $message_id ] " . "\n";                
+                $message_len = current( unpack( 'N', $this->bufferRead( $peer_info, 4 ) ) );                
+                if( $message_len == 0 ){
+                    //echo "keep alive\n";
+                    return;
+                }                
+                $message_id = current( unpack( 'C', $this->bufferRead( $peer_info, 1 ) ) ); // TODO iam getting an error where 0 bytes are read                   
             }
         }else{
             // cant calulate message length yet, need atleast 4 bytes
             return;
         }
         
+        echo "{$peer_info->address}[ $message_len | $message_id ] " . "\n";  
         // At this point we have the full message, soo lets do this
         switch( $message_id ){
             case 0:
                 // Choke, 
-                $peer_info->choke_client = true;
+                $peer_info->choked_client = true;
                 break;
             case 1:
                 // unchoke,                            
-                $peer_info->choke_client = false;
+                $peer_info->choked_client = false;
                 break;    
             case 2:
                 // Interested,
-                // Peer is Interested in my data, lets unchoke peer       
+                // Got an interested message, lets mark and deal with it later
+                $peer_info->interested_in_client = true;
+                
                 // TODO there really should be an algorithm to determin the best time to unchoke
-                $this->messageUnChoke( $peer_info->resource );     
-                $peer_info->choke_peer = false;
+                // Peer is Interested in my data, lets unchoke peer                
+                $this->messageUnChoke( $peer_info->resource );                
+                $peer_info->choked = false;
                 break;
             case 3:
                 // Not Interested,
-                // Peer is not interested in me, how sad. Put peer back on choke
-                $peer_info->choke_peer = true;
+                // Peer is not interested in me, how sad.
+                $peer_info->interested_in_client = false;                
+               
+                //Put peer back on choke
+                $peer_info->choked = true;
                 $this->messageChoke( $peer_info->resource ); 
                 break;
             case 4:
                 // have,                    
                 $raw = $this->bufferRead( $peer_info, 4 );
                 $have = current( unpack( 'N', $raw ) );                    
-                $peer_info->bitfield = $this->flipBitOn( $peer_info->bitfield, $have );                    
+                //$peer_info->bitfield = $this->flipBitOn( $peer_info->bitfield, $have ); 
+                $peer_info->bitfield[ $have ] = true;
                 break;    
             case 5:
-                // bitfield, 
-                // TODO according to specs peers that has the resrve filled, get diconnected.
-                // TODO make sure bitfield is of the right size
-                $bitfield = $this->bufferRead( $peer_info, $message_len - 1 );                   
-                $peer_info->bitfield = $bitfield;                    
+                // bitfield,                
+                $peer_info->bitfield = new BitArray( count( $torrent_info->bitfield ) );
+                try{                
+                    $peer_info->bitfield->assignBinaryString( $this->bufferRead( $peer_info, $message_len - 1 ) );                     
+                }catch( Exception $e ){
+                    // Peer has a fualty bitfield, disconnect peer.
+                    $peer_info = null;                    
+                    return;
+                }                  
                 break;
             case 6:
-                // request                              
-                $index = current( unpack( 'N', $this->bufferRead( $peer_info, 4 ) ) );                            
-                $begin = current( unpack( 'N', $this->bufferRead( $peer_info, 4 ) ) );
-                $length = current( unpack( 'N', $this->socketRead( $peer_info, 4 ) ) );
-                
-                if( !$peer_info->choke_peer ){
+                // request     
+                if( $peer_info->choked ){
                     // Peer is in choke and is still making requests, what nerve.
                     echo "Peer {$peer_info->address}:{$peer_info->port} is making request while in choke,\n";   
-                    continue;
-                }
-                                    
+                    $peer_info = null;
+                    return;
+                }                
+                
+                $index = current( unpack( 'N', $this->bufferRead( $peer_info, 4 ) ) );                            
+                $begin = current( unpack( 'N', $this->bufferRead( $peer_info, 4 ) ) );
+                $length = current( unpack( 'N', $this->bufferRead( $peer_info, 4 ) ) );
+                                                    
                 $seek = ( $torrent_info->piece_length * $index ) + $begin;
                 
                 $block = Storage::read( $torrent_info, $seek, $length );
                 
-                $this->messagePiece( $peer_info->resource, $index, $begin, $block  );   
+                $this->messagePiece( $peer_info->resource, $index, $begin, $block  );               
                 $torrent_info->bytes_uploaded += strlen( $block ); 
+                
+                $msg = "Gave a piece(index:$index, begin:$begin) to peer, {$peer_info->address}:{$peer_info->port}, for torrent {$peer_info->info_hash}";
+                logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );
                 break;
             case 7:
                 // payload                            
@@ -804,7 +858,7 @@ class Daemon{
                 $block = $this->bufferRead( $peer_info, $message_len - 9 );         
                 
                 if( !isset( $peer_info->piece_buffers[ $index ] ) ){
-                    // The index probably been unset
+                    // The index probably have been unset
                     continue;
                 }
                                     
@@ -826,35 +880,40 @@ class Daemon{
                     ++$peer_info->number_of_bad_data;
                     if( $peer_info->number_of_bad_data >= Config::PEER_BAD_DATA_THRESHOLD ){
                         echo "Notice, peer {$peer_info->address}:{$peer_info->port} gave way to many bad payloads,\n";
-                        // disonnect for peer
-                        socket_close( $peer_info->resource );
+                        // disonnect for peer                        
                         $peer_info = null;
                         return false;
-                    }                        
-                    
+                    }                    
                 }else{
-                    echo "Good piece at index $index for torrent {$peer_info->info_hash}\n";
+                    $msg = "peer, {$peer_info->address}:{$peer_info->port}, gave good piece at index $index for torrent {$peer_info->info_hash}";
+                    logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );                    
                 }
                 
                 // Write piece to file
                 $seek = $index * $torrent_info->piece_length;
                 Storage::write( $torrent_info, $seek, $full_piece_block );
                                             
-                // flip the bit
-                $torrent_info->bitfield = $this->flipBitOn( $torrent_info->bitfield, $index );
-                $torrent_info->bytes_left = $this->bytesLeft( $torrent_info );
+                // flip the bit on to indicate we have this piece
+                // $torrent_info->bitfield = $this->flipBitOn( $torrent_info->bitfield, $index ); TODO
+                $torrent_info->bitfield[ $index ] = true;
+                $torrent_info->bytes_left = $this->bytesLeft( $torrent_info );               
                 
                 if( $torrent_info->bytes_left == 0 ){
-                    echo "Torrent {$torrent_info->bytes_left} has finished completely";
+                    $msg = "Torrent {$torrent_info->bytes_left} has finished completely";
+                    logger::logMessage( self::PROGRAM_NAME, Logger::STATUS, $msg );                
+                
+                    if( Config::TORRENT_COMPETION_NOTIFICATION_SCRIPT != "" ){
+                        // run special script
+                        exec( Config::TORRENT_COMPETION_NOTIFICATION_SCRIPT . "-t {$peer_info->info_hash} > /dev/null &" );
+                    }                   
                 }
                 
-                // Update bytes left
-                                    
+                // Update bytes left TODO                                    
                 //array_push( $have_arr, array( $peer_info->info_hash, $index ) );
                 
                 $torrent_info->bytes_downloaded += strlen( $full_piece_block ); 
                 break;
-             case 8:
+            case 8:
                 // cancel
                 // This is not supported at this time
                 $this->bufferRead( $peer_info, $message_len - 1 );
@@ -877,42 +936,29 @@ class Daemon{
     * 
     */
     private function makeRequests( TorrentInformation $torrent_info, PeerInformation &$peer_info ){
-    
-        // TODO dont make request from peer when this torrent is already completed
-    
+       
         if( is_null( $peer_info->bitfield ) ){
             // peer is not ready with it's bitfield
-            // TODO When will it ever be ready?
+            // TODO When will it ever be ready?            
             return;
         }                
     
-        if( $peer_info->choke_client ){
+        if( $peer_info->choked_client ){
             // You are in a choke by the peer. tell peer to change it's mind                    
             if( ( time() - $peer_info->last_interested_time ) < 30 ){
-                // don't be annoying                
+                // don't be annoying
                 return;
             }
             
-            // Compare our bitfield with peer's.             
-            $client_byte_array = unpack( 'C*', $torrent_info->bitfield );
-            $peer_byte_array = unpack( 'C*', $peer_info->bitfield );
-            
-            $length = count( $client_byte_array ); 
-            if( $length != count( $peer_byte_array ) ){
-                //echo "Error, bitfield doesn't match .\n";
-            }
-                       
-            $interested = false;            
-            for( $i = 1; $i < $length + 1; ++$i ){
-                $temp = $peer_byte_array[ $i ] ^ $client_byte_array[ $i ];
-                $temp = $peer_byte_array[ $i ] & $temp;
-                
-                if( $temp > 0 ){
-                    // The peer has piece(s) you don't have
-                    $interested = true; 
+            $number_of_bits = count( $torrent_info->bitfield );           
+            $interested = false;  
+            for( $i = 0; $i < $number_of_bits; ++$i ){
+                if( $peer_info->bitfield[ $i ] == true && $torrent_info->bitfield[ $i ] == false ){
+                    // The peer has piece(s) you don't have          
+                    $interested = true;                     
                     break;
-                }
-            }
+                }               
+            }            
             
             if( $interested ){
                 // send interested message
@@ -925,12 +971,21 @@ class Daemon{
             $peer_info->last_interested_time = time();                     
         }else{
             // While not in choke, start grabbing data from peer 
-            
-            // Check if a piece_buffer timmed output
             $ctime = time();
+            
+            if( ( $ctime - $peer_info->last_upload_time ) < 15 &&  $peer_info->last_upload_time != 0 ){
+                //echo "peer timed out\n";
+                //exit();
+            }
+            
+            //echo "\nhere\n";
+            
+            // Check if any piece buffer timmed            
             foreach( $peer_info->piece_buffers as $key=>$buffer ){
                 if( $ctime - $buffer[ 'timer' ] > Config::PIECE_SEGMENT_TIMEOUT ){
-                    echo "A piece timed out";
+                
+                    echo "A piece from peer, {$peer_info->address}:{$peer_info->port}, timed out.\n";
+                    echo $buffer[ 'requests' ] . "\n";
                     unset( $peer_info->piece_buffers[ $key ] );
                 }
             }
@@ -939,49 +994,35 @@ class Daemon{
                 // In terms of slots, when one slot its free then we can use it, but if all slots are busy we cant contine
                 return;
             }
-                                         
-            $client_byte_array = unpack( 'C*', $torrent_info->bitfield );
-            $peer_byte_array = unpack( 'C*', $peer_info->bitfield );
+                       
             
-            $arr_length = count( $client_byte_array );    
-            if( $arr_length != count( $peer_byte_array ) ){                
-                echo "bitfield length mismatch\n;";
+            $number_of_bits = count( $torrent_info->bitfield );
+            $needed_pieces = array();
+            for( $i = 0; $i < $number_of_bits; ++$i ){
+                if( $peer_info->bitfield[ $i ] == true && $torrent_info->bitfield[ $i ] == false ){
+                    // we dont have this piece
+                    array_push( $needed_pieces, $i ); 
+                }
             }
             
-            
-            $needed_pieces = array();
-            // Find all pieces that peer has that we dont.
-            for( $i = 1; $i < $arr_length + 1; ++$i ){ // Array starts with key = 1; $arr_length = last index of array
-                $temp = $peer_byte_array[ $i ] ^ $client_byte_array[ $i ];
-                $temp = $peer_byte_array[ $i ] & $temp;  
-                
-                if( $temp == 0 ){
-                    // Peer has nothing for this byte
-                    continue;
-                }                
-                // this byte contians data we dont have
-                
-                $place = 128;
-                for( $n = 0; $n < 8; ++$n ){
-                    if( ( ( $temp & $place ) ) > 0 ){
-                        array_push( $needed_pieces, ( ( $i - 1 ) * 8 ) + $n );                                
-                    }
-                    $place = $place >> 1;
-                }        
-                //break; // test
-                //echo = str_pad( decbin( $temp ), 8, "0", STR_PAD_LEFT );                        
-            }      
-            
             if( empty( $needed_pieces ) ){
-                // We got all the pices from this peer                
-                // we no longer interested in the peer's data   
-                echo "LLLL\n\n;";
+                // We got all the pieces from this peer and no longer interested in the peer's data.                
                 $this->messageNotInterested( $peer_info->resource );
+                echo "We got all of peer's pieces\n";
+                // If peer is also not interested in us, there is no need to hang around
+                if( $peer_info->choked == true ){
+                    //$peer_info = null;
+                    //return;
+                }
+                
+                echo "Peer wants stuff.\n";
                 // automatically choke our self
-                $peer_info->choke_client = true;   
+                $peer_info->choked_client = true;   
                 return;
             }
             
+            
+           // echo 'here,';
             // NOTE Iam using random pieces requests, so no sequential requests are alowed
             // According to https://wiki.vuze.com/w/Sequential_downloading_is_bad
             $arr_length = count( $needed_pieces );
@@ -1055,34 +1096,68 @@ class Daemon{
         $write = null;
         $except = null;
         
-        if( socket_select( $read, $write, $except, 0 ) == 1 ){   
+        if( socket_select( $read, $write, $except, 0 ) == 1 ){  
+            // we have an incomming connection.
             $client = socket_accept( $this->interface_conn );
+            
             if( count( $this->interface_clients ) >= Config::MAX_INTERFACE_CONNECTIONS ){
-                // To many connection.
-                socket_close( $client );
+                // To many connections.
+                echo "Can't access daemon controls, too many entities are already controlling it.\n";
+                socket_close( $client );                
+                return;
+            }
+            
+            if( Config::INTERFACE_USERNAME == '' ){
+                // Authentication is disabled, instant access
+                socket_write( $client, pack( 'C', self::SUCCESS ), 1 );
+                socket_getpeername ( $client, $addr, $port );                 
+                array_push( $this->interface_clients, $client );
+                echo "Client $addr:$port has successfully connected and stored to the Daemon's interface.\n";
             }else{
-                // before i can store socket, authenticate client
+                // FIXME 
                 // TODO http://blog.leenix.co.uk/2011/05/howto-php-tcp-serverclient-with-ssl.html
-                // TODO Create max attempts peer time interval                
+                // Before storing socket, authentication of client must Succeed                
+                echo "2.\n";
+                $estimated_size = Config::MAX_USERNAME_SIZE + Config::MAX_PASSWORD_SIZE + 1;
                 
-                $userpass = socket_read( $client, 32 );        
-                list( $username, $password ) = explode( ':', $userpass );
-                        
-                if( Config::INTERFACE_USERNAME == $username && Config::INTERFACE_PASSWORD == $password ){    
-                    socket_write( $client, "success", 7 );
-                    array_push( $this->interface_clients, $client );
-                }else{
-                    // TODO logger
-                    socket_write( $client, "failed", 6 );
+                //socket_set_option( $client, SOL_SOCKET, SO_RCVTIMEO, array( "sec"=>2,"usec"=>0 ) );
+                socket_recv( $client, $userpass, $estimated_size, MSG_WAITALL );
+                //while( ( $userpass = socket_read( $client, $estimated_size ) ) === 0 );
+                
+                
+                if( $userpass == 0 ){
+                    // Peer probably disconnected with use.
+                    echo socket_strerror(socket_last_error()) . "\n";;
                     socket_close( $client );
                     return;
                 }
-            }                    
+                
+                list( $username, $password ) = explode( ':', $userpass );
+                echo "$userpass.\n";
+                if( strlen( $username ) <= Config::MAX_USERNAME_SIZE && strlen( $username ) <= Config::MAX_PASSWORD_SIZE ){
+                    echo "Interface client failed to authenticate becuase of userpass lenght exceeding limits in config.php.\n";
+                }
+                        
+                if( Config::INTERFACE_USERNAME == $username && Config::INTERFACE_PASSWORD == $password ){
+                    // Yeah we got a connection send a success to peer and and client to list
+                    socket_write( $client, pack( 'C', self::SUCCESS ), 1 );
+                    array_push( $this->interface_clients, $client );
+                                        
+                    socket_getpeername ( $client, $addr, $port ); 
+                    echo "Client $addr:$port has successfully connected to the Daemon's interface.\n";
+                }else{
+                    // failed
+                    // TODO logger
+                    socket_write( $client, pack( 'C', self::FAILURE ), 1 );
+                    socket_close( $client );
+                    return;
+                }
+            }                 
         }
         
-        // handle clients of interface socket   
+        // handle clients of interface sockets   
         if( count( $this->interface_clients ) == 0 ){
-            // No connections
+            // We have no clients to work with
             return;
         }       
               
@@ -1297,30 +1372,31 @@ class Daemon{
     }
     
     /**
-     *
+     * Gather information about completed pieces and total filesize
+     * to determine how many bytes are left for the torrent.
+     * @param TorrentInformation
+     * @return The number of bytes left.
      */
-    private function BytesLeft( TorrentInformation $torrent_info ){
-                
-        $total_filesize =  $torrent_info->files->getTotalFileSize();        
+    private function BytesLeft( TorrentInformation $torrent_info ){                
+        $total_filesize = $torrent_info->files->getTotalFileSize();        
         $has_left = $total_filesize;
         
-        $bitfield_str_length = strlen( $torrent_info->bitfield );
-        
-        // Loop though each char in the string,
-        for( $byte_pos = 0; $byte_pos < $bitfield_str_length; ++$byte_pos ){
-            // Loop though each char as if it was a bit array
-            for( $bit_pos = 0; $bit_pos < 8; ++$bit_pos ){            
-                if( current( unpack( 'C', $torrent_info->bitfield[ $byte_pos ] ) ) & ( 128 >> $bit_pos ) ){                
-                    $has_left -= $torrent_info->piece_length;                     
-                }                
+        $bits = count( $torrent_info->bitfield );
+                
+        for( $i = 0; $i < $bits; ++$i ){
+            if( $torrent_info->bitfield[ $i ] == true ){
+                if( $i == $bits - 1 && ( $reminder = $total_filesize % $torrent_info->piece_length ) > 0 ){
+                    // The last bit might is a different size
+                    $has_left -= $reminder;
+                    continue;
+                }
+                $has_left -= $torrent_info->piece_length;
             }
-        }
+        }          
         
-        // I may have cross the last bit that has a different size
-        if( $has_left < 0 ){        
-            $has_left = 0;        
-        }
-               
+        $msg = "Torrent, {$torrent_info->info_hash}, has $has_left byte(s) left.";
+        logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );
+        
         return $has_left;               
     }
     
@@ -1563,24 +1639,28 @@ class Daemon{
     private function connectTracker_HTTP( AnnounceInformation &$announce_info ){ 
         $url_comp = parse_url( $announce_info->url ); 
         
-        if( !isset( $announce_info->address ) ){            
+        if( !isset( $announce_info->address ) ){         
+            // The real address is not set yet
             $announce_info->address = gethostbyname( $url_comp[ "host" ] ); // NOTE at times this is slow            
             if( !filter_var( $announce_info->address, FILTER_VALIDATE_IP ) ){
                 // Can't get ip address, don't bother
+                $msg = "Can't get ip address from tracker {$announce_info->url}";
+                logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );
+                
                 ++$announce_info->number_of_failed_connections;
                 return false;
             }           
         }
-        
-        $address = $url_comp[ "host" ];    
-        $port = 80;      
+                
+        $port = 80; // default http port     
         if( isset( $url_comp[ "port" ] ) ){
             $port = $url_comp[ "port" ];
         }  
         
         if( !$announce_info->is_connected && !$announce_info->is_connecting ){         
             // Create a connection to the torrent
-            $announce_info->resource = socket_create( AF_INET, SOCK_STREAM, SOL_TCP );            
+            $announce_info->resource = socket_create( AF_INET, SOCK_STREAM, SOL_TCP );       
+            //socket_set_option( $announce_info->resource, SOL_SOCKET, SO_RCVTIMEO, array( "sec"=>5,"usec"=>0 ) );
             socket_set_nonblock( $announce_info->resource );
             $announce_info->conection_timeout = time();
             $announce_info->is_connecting = true;               
@@ -1599,7 +1679,9 @@ class Daemon{
             }
             if( $result ){
                 // We are connected
-                echo "Tracker, {$announce_info->url}, connected.\n";
+                $msg = "Tracker, {$announce_info->url}, successfully connected.";
+                logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );                
+                
                 socket_set_block( $announce_info->resource );
                 $announce_info->is_connected = true;
                 $announce_info->is_connecting = false;   
@@ -1625,36 +1707,38 @@ class Daemon{
         
         if( $announce_info->is_connected ){
             $read = array( $announce_info->resource );
-            $write = null;
-            $except = null;            
+                  
             if( socket_select( $read, $write, $except, 0 ) > 0 ){
                 // Don't write any data while there is data in the read buffer
                 return;
             }   
             
-            // Finally send Your request
+            // Finally send your request
             $getdata = http_build_query(
                 array(        
                     'info_hash' => pack( "H*", $torrent_info->info_hash ),
                     'peer_id' => $this->peer_id,
-                    'event' => 'started',
+                    'event' => 'started', // TODO on the tracker project
                     //'compact' => 0,
                     'numwant' => Config::TRACKER_NUMWANT,
                     'port' =>  $my_port,
                     'uploaded' => $torrent_info->bytes_uploaded,
                     'downloaded' => $torrent_info->bytes_downloaded,
-                    'left' => $torrent_info->bytes_left
+                    'left' => $torrent_info->bytes_left + 2
                 )
             );
          
-            // TODO fix / TODO follow 301 redirects?
+            // TODO fix / TODO follow 301 redirects? /TODO Some tracker redirects back to me
             $out = "";
             $out .= "GET $path/?$getdata HTTP/1.1\r\n";
             $out .= "Host: {$url_comp["host"]}\r\n";            
-            $out .= "Connection: Close\r\n\r\n";
+            $out .= "Connection: keep-alive\r\n\r\n";
             
             
-            socket_write( $announce_info->resource, $out, strlen( $out ) );        
+            socket_write( $announce_info->resource, $out, strlen( $out ) );  
+            
+            //$msg = "Sent {$url_comp["host"]} $path/?$getdata to tracker {$announce_info->url}";
+            //logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );
         }       
     }         
     
@@ -1680,7 +1764,7 @@ class Daemon{
                 try{
                     $tracker_response = Bencode::decode( $raw_response );
                 }catch( Exception $e ){                    
-                    echo "Error getting response from {$announce_info->url} $raw_response\n";
+                    echo "Error getting response from {$announce_info->url} $raw_response $raw_http\n";
                     $announce_info->interval = 128;
                     $announce_info->last_access_time = time();                    
                     // TODO 
@@ -1732,7 +1816,9 @@ class Daemon{
             $announce_info->address = gethostbyname( $url_comp[ "host" ] ); // NOTE at times this is slow            
             if( !filter_var( $announce_info->address, FILTER_VALIDATE_IP ) ){
                 // Can't get ip address, don't bother
-                echo "Can't get IP address from {$announce_info->address}.\n";
+                $msg = "Can't get ip address from tracker {$announce_info->url}";
+                logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );
+                
                 ++$announce_info->number_of_failed_connections;
                 return false;
             }           
@@ -1886,28 +1972,43 @@ class Daemon{
         $n = Config::TRACKER_NUMWANT;
         $readlength = 20 + ( 6 * $n );
         $raw_response = socket_read( $announce_info->resource, $readlength );
-        //$response = unpack( 'N6/np1', $raw_response );
-        $response = unpack( 'Naction/Ntransaction_id/Ninterval/Nleechers/Nseeders', $raw_response );
         
-        
-        $peers = array();        
-        for( $i = 20; $i < strlen( $raw_response ); $i = $i + 6 ){
-            $peer = unpack( 'Nip/nport', substr( $raw_response, $i, 6  ) );
-            $peer[ 'ip' ] = long2ip( $peer[ 'ip' ] );
-            array_push( $peers, $peer );
-        }
-                        
-        // Convert to array
-        $true_responce = array(
-            'interval' => $response[ 'interval' ],
-            'complete' => $response[ 'seeders' ],
-            'incomplete' => $response[ 'leechers' ],
-            'peers' => $peers      
-        );      
-        //var_dump( $true_responce );
-        //exit();
-        
-        return $true_responce;         
+        $action = current( unpack( 'Naction', $raw_response ) );
+        switch( $action ){
+            case 1:
+                // output
+                $response = unpack( 'Naction/Ntransaction_id/Ninterval/Nleechers/Nseeders', $raw_response );
+                
+                $peers = array();        
+                for( $i = 20; $i < strlen( $raw_response ); $i = $i + 6 ){
+                    $peer = unpack( 'Nip/nport', substr( $raw_response, $i, 6  ) );
+                    $peer[ 'ip' ] = long2ip( $peer[ 'ip' ] );
+                    array_push( $peers, $peer );
+                }                                
+                // Convert to array
+                $true_responce = array(
+                    'interval' => $response[ 'interval' ],
+                    'complete' => $response[ 'seeders' ],
+                    'incomplete' => $response[ 'leechers' ],
+                    'peers' => $peers      
+                ); 
+                return $true_responce; 
+                break;
+            case 2:
+                // scrape, we don't use this                
+                break;
+            case 3:
+                // error
+                $error_msg = strstr( $raw_response, 8 );
+                $msg = "Error getting response from {$announce_info->url}, with message: $error_msg.";
+                logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );                
+                $announce_info->interval = 180;
+                $announce_info->last_access_time = time();                    
+                return false;
+                break;
+        };
+               
+                
     }
     
     
@@ -2118,7 +2219,7 @@ class Daemon{
       * Send bitfield
       */
      private function messageBitfield( $socket, $bitfield ){
-        $message_id = pack( 'C', 5 );
+        $message_id = pack( 'C', 5 ); 
         $message_len = pack( 'N', strlen( $bitfield ) + 1 );
         $message = $message_len . $message_id . $bitfield;
         

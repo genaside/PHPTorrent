@@ -101,6 +101,7 @@ class Storage{
     /**
      * Full hash check
      * @return A binary string repersenting the 
+     * @return A BitArray Object
      * pieces we have and dont have(1s and 0s).
      */
     public static function fullHashCheck( TorrentInformation $torrent_info ){
