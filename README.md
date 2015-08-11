@@ -5,10 +5,10 @@
 This is BitTorrent client based on the PHP(5.4) language.
 The torrent has a lot of work to be done on it; however, for
 simple leeching/seeding it should work. I am interested in any
-help from the community.
+help from the community
 
 Check out tcz/PHPTracker for all your tracker needs.
-=======
+========
 # PHPTorrent 0.0.1 alpha
 >>>>>>> 2e0edf9de6655b5d73f61f9ef99f93745dd25281
 
