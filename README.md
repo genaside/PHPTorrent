@@ -9,8 +9,6 @@ help from the community
 
 Check out tcz/PHPTracker for all your tracker needs.
 ========
-# PHPTorrent 0.0.1 alpha
->>>>>>> 2e0edf9de6655b5d73f61f9ef99f93745dd25281
 
 ## Config
 
