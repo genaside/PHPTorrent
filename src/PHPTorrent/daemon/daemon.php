@@ -15,65 +15,77 @@
  * http://stefan.buettcher.org/cs/conn_closed.html
  */
 class Daemon{
-    // Daemon personal constants
+    // Daemon constants    
     // client id consiting of program abbreviation and version number
-    const CLIENT_ID = "-PT0040-"; // Azureus-style
+    const CLIENT_ID = "-PT0001-"; // Azureus-style
     // Name of the program
     const PROGRAM_NAME = "PHPTorrent"; 
     // Version of the program
     const PROGRAM_VERSION = "0.0.1";
     
-    // Other constance
+    // Other constants
     const SUCCESS = 1;
     const FAILURE = 0;
     
     /**
      * A randomly created ID
-     * @note each time the deamon starts you'll get a completly different id each time.
-     * @note that ascii number and letters are being used right now, and complexity might change later on.
+     * @note Each time the daemon starts you'll get a completly different 
+     * id each time, hence being random.
+     * @note Ascii number and letters are being used right now, 
+     * the complexity might change later on to fit the trend of other
+     * torrent clients.
+     *
      * @var string
      */
     private $peer_id;
     
     /**
      * Daemon's only port for peers to connect to
+     *
      * @var resource
      */
     private $port;
-    
+            
     /**
-     * A SQLite resource connection.
-     * @var resource
+     * Database handler
+     *
+     * @var object     
      */
-    private $db_conn;    
+    private $database_handler;    
     
     /**
      * A port for local or remote operators to control and 
      * get information about the daemon.
+     *
      * @var resource
      */
     private $interface_conn;
     
     /**
-     * Array of 
-     * @var array
+     * Array of sockets connected to the Daemon's
+     * control interface.
+     *
+     * @var array 
      */
     private $interface_clients = array();
     
     /**
-     * A flag that tells the client to shutdown on the beginning of the next interation.
+     * A flag that tells the client to shutdown on
+     * the beginning of the next interation.
+     *
      * @var bool
      */
     private $is_running_flag = true;
        
     
     /**
-     * Constructor
+     * Constructor.
+     * 
      */
     public function __construct(){}
     
     /**
-     * Clean up.     * 
+     * Clean up.
      */
     public function __destruct(){    
         //TODO check before closing
@@ -82,14 +94,16 @@ class Daemon{
         socket_close( $this->port );
                 
         // Close database connection
-        $this->db_conn->close();
+        if( isset( $this->database_handler ) ){
+            $this->database_handler->disconnect();
+        }
         
         // Close the Interface port
         socket_close( $this->interface_conn );
     }
     
     /**
-     * Start running the bittorent client
+     * Start running the bittorent client.
      */
     public function start(){
         // initialize various components 
@@ -182,8 +196,7 @@ class Daemon{
      * The creates A sort of interface for this bittorent.
      * By using a socket the client can be controlled or even
      * a gui wrapper can by use this mechinism.
-     * 
-     * @throws     
+     *      
      */
     private function initializeInterface(){
         //$socket = @socket_create( AF_INET, SOCK_STREAM, SOL_TCP );
@@ -209,102 +222,31 @@ class Daemon{
     
     
     /**
-     * Make a connection Using SQLite.
-     * Create a database if haven't already done so.
-     * If everything goes well the resource connection is stored.
-     * 
-     * @throws     
+     * Start up the database handler, and build
+     * the database while we're at it
+     *      
      */
     private function initializeDatabase(){
-        try{
-            $this->db_conn = new SQLite3( 
-                Config::CLIENT_DATABASE_LOCATION, 
-                SQLITE3_OPEN_READWRITE | SQLITE3_OPEN_CREATE 
-            );
-        }catch( Exception $e ){
-            $error_msg = $this->db_conn->lastErrorMsg();
-            logger::logMessage( self::PROGRAM_NAME, Logger::CRITICAL, $error_msg );  
-            exit();
-        }
+        $this->database_handler = new Database();
+        $this->database_handler->connect();
+        $this->database_handler->buildDatabase();    
         
-        if( !$this->db_conn->busyTimeout( 1 ) ){
-            $error_msg = $this->db_conn->lastErrorMsg();
-            logger::logMessage( self::PROGRAM_NAME, Logger::WARNING, $error_msg );
-            // TODO to exit or not to exit, that is the question.
-        }         
-        
-        $status = $this->db_conn->exec( 'PRAGMA foreign_keys = ON;' );
-        if( !$status ){
-            $error_msg = $this->db_conn->lastErrorMsg();
-            logger::logMessage( self::PROGRAM_NAME, Logger::CRITICAL, $error_msg );
-            exit();
-        }
-        
-        $status = $this->db_conn->exec( "
-        CREATE TABLE IF NOT EXISTS Torrents(
-            -- Info about the torrent its self
-            info_hash         TEXT  PRIMARY KEY  NOT NULL,   
-            name              TEXT               NOT NULL,
-            piece_length      INT                NOT NULL,
-            pieces            BLOB               NOT NULL,
-            is_private        INT   DEFAULT 0    NOT NULL,            
-            -- Storage
-            destination       TEXT               NOT NULL, -- Location for download file(s)
-            -- Statistics           
-            bytes_left        INT                NOT NULL, -- Bytes left till download completes
-            bytes_uploaded    INT   DEFAULT 0    NOT NULL, -- Total bytes downloaded
-            bytes_downloaded  INT   DEFAULT 0    NOT NULL, -- Total bytes uploaded 
-            -- Options
-            active            INT   DEFAULT 1    NOT NULL, -- 1 active, 0 inactive
-            download_speed    INT   DEFAULT 0    NOT NULL, -- Maximum download speed of torrent
-            upload_speed      INT   DEFAULT 0    NOT NULL  -- Maximum upload speed of torrent 
-        );        
-        CREATE INDEX IF NOT EXISTS idx_1 on Torrents( info_hash );
-        
-        CREATE TABLE IF NOT EXISTS Files(
-            info_hash         TEXT               NOT NULL,
-            filename          TEXT                       , -- null means that the filename is the name in torrent
-            filesize          INT                NOT NULL,
-            FOREIGN KEY( info_hash ) REFERENCES Torrents( info_hash ) ON DELETE CASCADE,
-            UNIQUE( info_hash, filename )
-        );        
-        CREATE INDEX IF NOT EXISTS idx_2 on Files( info_hash );
-        
-        CREATE TABLE IF NOT EXISTS AnnounceUrls(
-            info_hash         TEXT               NOT NULL,
-            url               TEXT               NOT NULL,
-            rank              INT   DEFAULT 0    NOT NULL, -- The rank of how good the tracker is in returning results
-            FOREIGN KEY( info_hash ) REFERENCES Torrents( info_hash ) ON DELETE CASCADE,
-            UNIQUE( info_hash, url )
-        );
-        CREATE INDEX IF NOT EXISTS idx_3 on AnnounceUrls( info_hash );
-        ");
-        
-        if( !$status ){
-            $error_msg = $this->db_conn->lastErrorMsg();
-            logger::logMessage( self::PROGRAM_NAME, Logger::CRITICAL, $error_msg );  
-            exit();
-        }
-        
-        logger::logMessage( self::PROGRAM_NAME, Logger::STATUS, "Database ok:" . Config::CLIENT_DATABASE_LOCATION );
+        logger::logMessage( self::PROGRAM_NAME, Logger::STATUS, "Database seems ok:" . Config::CLIENT_DATABASE_LOCATION );        
     }
     
     /**
      * Function where all the magic happens.
-     * First we will check the the interface port
-     * to see if there are any other jobs to take other than
-     * seeding and leaching.
-     * For each running torrent we gonna announce ourselves then get tracker response.
-     * from the peer list we handle each peer requests and then make our own.     * 
-     * @throws     
+     * 1. Check if user sent an operations to take.
+     * 2. Announce ourselves
+     * 3, Do either some seeding or leaching.
+     *     
      */
     private function mainLoop(){       
-        $torrent_info_list = $this->getActiveTorrents( Config::MAX_ACTIVE_RUNNING_TORRENTS );        
+        $torrent_info_list = $this->database_handler->getActiveTorrents( Config::MAX_ACTIVE_RUNNING_TORRENTS );        
         $peer_info_list = new PeerInformationList; //     
         $last_stat_update_time = time(); //  
-        $have_arr = array(); // { info_hash|index }
-        
-        //        
+        $have_arr = array(); // { info_hash|index }        
+        // Need to know your port and ip        
         socket_getsockname( $this->port, $my_addr, $my_port_number );        
     
         while( $this->is_running_flag ){   
@@ -312,11 +254,10 @@ class Daemon{
             $this->processCommands( $torrent_info_list, $peer_info_list ); 
             
             if( $torrent_info_list->isEmpty() ){    
-                // There are no torrents to work on
-                // dont need to overwork the CPU for an empty list, sleeping for a little bit.
+                // There are no torrents to work on                
                 $msg = "There are no torrents for the client to work on.";
                 logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );                 
-                // We dont want to use up the cpu
+                // dont need to overwork the CPU for an empty list, sleeping for a little bit.
                 sleep( 5 ); 
                 continue;
             } 
@@ -327,12 +268,12 @@ class Daemon{
                     // Hash check file(s) if havent already done so, and  set bitfield with it
                     $torrent_info->bitfield = new BitArray( strlen( $torrent_info->pieces ) / 20 );
                     
-                    $msg = "Checking the hash of file(s) for torrent {$torrent_info->info_hash}...";
+                    $msg = "Checking the hash of the file(s) for torrent, {$torrent_info->info_hash}...";
                     logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );                     
                     
                     $torrent_info->bitfield->assignBinaryString( Storage::fullHashCheck( $torrent_info ) );                    
                     // calculate bytes remaining
-                    $torrent_info->bytes_left = $this->BytesLeft( $torrent_info );
+                    $torrent_info->bytes_left = $this->bytesLeft( $torrent_info );
                 }  
                                 
                 $ctime = time(); 
@@ -343,66 +284,83 @@ class Daemon{
                         // Not within tracker's time interval                       
                         continue;
                     }                   
-                    
-                    $url_comp = parse_url( $announce_info->url );                    
+                    // TODO move to another function
+                    $url_comp = parse_url( $announce_info->url );
+                    $manual_interval = 90; // 15 minutes
                             
                     if( $url_comp[ "scheme" ] == "http" || $url_comp[ "scheme" ] == "https" ){                                            
                         if( !$announce_info->is_connected ){  
-                            // Http(s) tracker has to connect
-                            if( $announce_info->number_of_failed_connections > 0 ){ 
-                                $announce_info->last_access_time = $ctime;
-                                $announce_info->interval = 3600;
-                                continue;
-                            }                             
+                            // Http(s) tracker has not connected yet
                             $this->connectTracker_HTTP( $announce_info );                            
+                            if( $announce_info->connection_failed ){ 
+                                // For some reason connection failed, try again much later
+                                $announce_info->last_access_time = $ctime;
+                                $announce_info->interval = $manual_interval;
+                                $announce_info->connection_failed = false;                                
+                            }                                                  
                             continue;
-                        }else{                           
+                        }else{      
+                            // tracker Connected, now send requests
                             $this->sendTrackerRequest_HTTP( $torrent_info, $announce_info, $my_port_number );
                             
                             if( !( $tracker_response = $this->recieveTrackerResponse_HTTP( $announce_info ) ) ){
-                                // Tracker has no response yet or error                                                                
+                                if( $announce_info->bad_response ){
+                                    // Tracker gave an error, try again much later
+                                    $announce_info->last_access_time = $ctime;
+                                    $announce_info->interval = $manual_interval;                                
+                                    $announce_info->bad_response = false;
+                                }
+                                // No response yet                                                                                       
                                 continue;
                             }else{
                                 $num_of_peers = count( $tracker_response[ 'peers' ] );
-                                echo "Tracker, {$announce_info->url}, returned $num_of_peers peers. ";
-                                echo "Next announce interval near at {$tracker_response['interval']}.\n";
+                                
+                                $msg = "Tracker, {$announce_info->url}, returned $num_of_peers peers.";
+                                logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg ); 
+                                $msg = "Next announce interval near at {$tracker_response['interval']}.";
+                                logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );
                             }                             
                         }                                            
                     }else if( $url_comp[ "scheme" ] == "udp" ){                  
                         if( !$announce_info->is_connected ){
-                            // UDP Tracker hasn't connected and is trying to do so                 
-                            if( $announce_info->number_of_failed_connections >= Config::TRACKER_CONNECTION_ERROR_THRESHOLD ){ 
-                                // Tracker failed to connect x amount of times  
-                                // Set the tracker interval with a very long interval, 30mim
-                                $announce_info->last_access_time = $ctime;
-                                $announce_info->interval = 3600;
-                                //unset( $torrent_info->announce_infos[ $key ] );
-                                continue;
-                            } 
-                            // begin connecting
+                            // UDP Tracker hasn't connected and is trying to do so   
                             $this->connectTracker_UDP( $announce_info );
+                            if( $announce_info->connection_failed ){ 
+                                $announce_info->last_access_time = $ctime;
+                                $announce_info->interval = $manual_interval;
+                                $announce_info->connection_failed = false; 
+                            }                                                        
                             continue;
                         }else{                              
                             $this->sendTrackerRequest_UDP( $torrent_info, $announce_info, $my_port_number );
+                            
                             if( !( $tracker_response = $this->recieveTrackerResponse_UDP( $announce_info ) ) ){                                
-                                // Tracker has no response yet or error                                 
+                                if( $announce_info->bad_response ){
+                                    // Tracker gave an error, try again much later
+                                    $announce_info->last_access_time = $ctime;
+                                    $announce_info->interval = $manual_interval;                                
+                                    $announce_info->bad_response = false;
+                                }                
                                 continue;
                             }else{
                                 $num_of_peers = count( $tracker_response[ 'peers' ] );
-                                echo "Tracker, {$announce_info->url}, returned $num_of_peers peers. ";
-                                echo "Next announce interval near at {$tracker_response['interval']}.\n";
+                                
+                                $msg = "Tracker, {$announce_info->url}, returned $num_of_peers peers.";
+                                logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg ); 
+                                $msg = "Next announce interval near at {$tracker_response['interval']}.";
+                                logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );
                             }                            
                         }      
                     
                     }else{
-                        // This tracker is not supported    
-                        echo "{$announce_info->url} is not a supported url.\n";
-                        // get rid of it
+                        // This tracker is not supported  
+                        $msg = "{$announce_info->url} is not a supported announce url.";
+                        logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );                        
+                        // get rid of it, don't want to deal with it
                         unset( $torrent_info->announce_infos[ $key ] );                        
                         continue;
                     } 
-                    
-                                                            
+                                                                                
                     $announce_info->interval = $tracker_response[ 'interval' ];
                     $announce_info->last_access_time = $ctime;
                     if( isset( $tracker_response[ 'min interval' ] ) ){
@@ -414,6 +372,10 @@ class Daemon{
                         if( $my_port_number == $peer[ 'port' ] && $my_addr == $peer[ 'ip' ] ){ 
                             // This is me, dont add.
                             continue;
+                        }
+                        
+                        if( count( $peer_info_list ) > 50 ){ // TODO
+                            break;
                         }
                         
                         // dont allow duplicate peers from entering
@@ -456,14 +418,16 @@ class Daemon{
                 
                 //if( $torrent_info->bitfield == $peer_info->bitfield ){
                 if( $torrent_info->bitfield == $peer_info->bitfield ){
-                    // neither of us can gain from each other because we have the pieces                        
+                    // neither of us can gain from each other because we have the pieces
+                    $msg = "Torrent, {$torrent_info->info_hash}, has the same exact bitfield as the peer.";
+                    logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );
+                    
                     unset( $peer_info_list[ $key ] );                      
                     continue;
                 }   
                 
                 // TODO
-                if( !$this->handleNewPeerConnection( $peer_info_list, $peer_info, $torrent_info ) ){ 
-                    
+                if( !$this->handleNewPeerConnection( $peer_info_list, $peer_info, $torrent_info ) ){                     
                     // not ready
                     if( is_null( $peer_info ) ){
                         unset( $peer_info_list[ $key ] );                       
@@ -539,7 +503,7 @@ class Daemon{
             // Add statistics to database
             if( ( $ctime = time() ) - $last_stat_update_time > Config::UPDATE_STATISTICS_INTERVERL ){
                 // Add statistics to database
-                $this->addStatisticsToDatabase( $torrent_info_list );
+                $this->database_handler->addStatisticsToDatabase( $torrent_info_list );
                 $last_stat_update_time = $ctime;
                 
                 $msg = "Updated Database.";
@@ -626,19 +590,17 @@ class Daemon{
     
     /**
      * Handles the making od connections to peers.
+     *
      * @note all peers that connect to us, uses a different funtion.
      * @param TorrentInformation We just need the bitfield to show the peer
      */
     private function handleNewPeerConnection( PeerInformationList $peer_info_list, PeerInformation &$peer_info, TorrentInformation $torrent_info ){
                
-        if( !$peer_info->is_connected && !$peer_info->is_connecting ){
-            // Create a freash new connection
-            
-            // First look in ther peer list to filter out peers with this info_hash
+        if( !$peer_info->is_connected && !$peer_info->is_connecting ){           
+            // First look in the peer list to filter out peers with current info_hash
             // then filter peers that are connecting or already connected states.
             $arr = $peer_info_list->toArray();
-            $farr = array_filter( $arr, function( $element ) use( $peer_info ){
-                // TODO partially_connected should be the same as is_connecting
+            $farr = array_filter( $arr, function( $element ) use( $peer_info ){                
                 if( $element->is_connected || $element->is_connecting ){                     
                     if( $element->info_hash == $peer_info->info_hash ){
                         return $element;
@@ -663,21 +625,15 @@ class Daemon{
                 if( ( time() - $peer_info->conection_timeout ) >= Config::PEER_CONNECTION_TIMEOUT ){     
                     $msg = "Connection to peer {$peer_info->address}:{$peer_info->port} timed out on socket.";
                     logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );
-                                                      
-                    $peer_info->is_connecting = false;    
-                    socket_close( $peer_info->resource ); // NOTE do i need this?
+                                        
                     $peer_info = null;
                     return false;
                 }                
             }
-            if( $result ){
-                // We connected to the peer socket, but not yet actually connected.
-                // Were half way there                                  
-                socket_set_block( $peer_info->resource );
-                //socket_set_option( $peer_info->resource, SOL_SOCKET, SO_RCVTIMEO, array( "sec"=>1,"usec"=>0 ) );
-                $peer_info->is_partially_connected = true;
-                $peer_info->is_connecting = true;                
-            }        
+           
+            // We connected to the peer socket, but not yet actually connected, Were half way there           
+            socket_set_block( $peer_info->resource );            
+            $peer_info->is_partially_connected = true;          
         }
         
         
@@ -688,16 +644,13 @@ class Daemon{
 
                 if( !$peer_info->received_handshake ){   
                     // Havent recievce handshake yet
-                    $read = array( $peer_info->resource );
-                    $write = null;
-                    $except = null;            
-                    if( ($test = socket_select( $read, $write, $except, 0 )) == 1 ){                        
+                    $read = array( $peer_info->resource );                    
+                    if( ( $test = socket_select( $read, $write, $except, 0 ) ) == 1 ){                        
                         $handshake = $this->recieveHandShake( $peer_info->resource );
                         if( !$handshake ){
                             $msg = "Connection to peer {$peer_info->address}:{$peer_info->port} timed out on handshake.";
-                            logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );
-                            
-                            socket_close( $peer_info->resource );                            
+                            logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );                            
+                                    
                             $peer_info = null;
                             return false;
                         }
@@ -713,7 +666,7 @@ class Daemon{
                 }
                 
                 if( !$peer_info->sent_handshake && $peer_info->info_hash ){
-                    $this->sendHandShake( $peer_info->info_hash, $peer_info->resource ); // TODO                    
+                    $this->sendHandShake( $peer_info->info_hash, $peer_info->resource );     
                     $peer_info->sent_handshake = true;                    
                 }         
                 
@@ -780,7 +733,7 @@ class Daemon{
             return;
         }
         
-        echo "{$peer_info->address}[ $message_len | $message_id ] " . "\n";  
+        //echo "{$peer_info->address}[ $message_len | $message_id ] " . "\n";  
         // At this point we have the full message, soo lets do this
         switch( $message_id ){
             case 0:
@@ -813,8 +766,7 @@ class Daemon{
             case 4:
                 // have,                    
                 $raw = $this->bufferRead( $peer_info, 4 );
-                $have = current( unpack( 'N', $raw ) );                    
-                //$peer_info->bitfield = $this->flipBitOn( $peer_info->bitfield, $have ); 
+                $have = current( unpack( 'N', $raw ) );                
                 $peer_info->bitfield[ $have ] = true;
                 break;    
             case 5:
@@ -892,14 +844,12 @@ class Daemon{
                 // Write piece to file
                 $seek = $index * $torrent_info->piece_length;
                 Storage::write( $torrent_info, $seek, $full_piece_block );
-                                            
-                // flip the bit on to indicate we have this piece
-                // $torrent_info->bitfield = $this->flipBitOn( $torrent_info->bitfield, $index ); TODO
+                           
                 $torrent_info->bitfield[ $index ] = true;
                 $torrent_info->bytes_left = $this->bytesLeft( $torrent_info );               
                 
                 if( $torrent_info->bytes_left == 0 ){
-                    $msg = "Torrent {$torrent_info->bytes_left} has finished completely";
+                    $msg = "Torrent {$torrent_info->info_hash} has finished completely";
                     logger::logMessage( self::PROGRAM_NAME, Logger::STATUS, $msg );                
                 
                     if( Config::TORRENT_COMPETION_NOTIFICATION_SCRIPT != "" ){
@@ -1092,64 +1042,54 @@ class Daemon{
      */
     private function processCommands( TorrentInformationList &$torrent_info_list, PeerInformationList &$peer_info_list ){
         // Handle any new connections first
-        $read = array( $this->interface_conn );
-        $write = null;
-        $except = null;
-        
+        $read = array( $this->interface_conn );                
         if( socket_select( $read, $write, $except, 0 ) == 1 ){  
             // we have an incomming connection.
             $client = socket_accept( $this->interface_conn );
+            socket_getpeername ( $client, $addr, $port );  
             
             if( count( $this->interface_clients ) >= Config::MAX_INTERFACE_CONNECTIONS ){
                 // To many connections.
-                echo "Can't access daemon controls, too many entities are already controlling it.\n";
-                socket_close( $client );                
+                $msg = "User can't access daemon controls, too many entities are already controlling it.";
+                logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );                
                 return;
             }
             
             if( Config::INTERFACE_USERNAME == '' ){
-                // Authentication is disabled, instant access
-                socket_write( $client, pack( 'C', self::SUCCESS ), 1 );
-                socket_getpeername ( $client, $addr, $port );                 
+                // Authentication is disabled, instant access                
+                $status = pack( 'C', self::SUCCESS );
+                socket_write( $client, $status, strlen( $status ) );                
+                
                 array_push( $this->interface_clients, $client );
-                echo "Client $addr:$port has successfully connected and stored to the Daemon's interface.\n";
-            }else{
-                // FIXME 
+                
+                $msg = "User $addr:$port has successfully connected and stored to the Daemon's interface.";
+                logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );                
+            }else{                
                 // TODO http://blog.leenix.co.uk/2011/05/howto-php-tcp-serverclient-with-ssl.html
                 // Before storing socket, authentication of client must Succeed                
-                echo "2.\n";
                 $estimated_size = Config::MAX_USERNAME_SIZE + Config::MAX_PASSWORD_SIZE + 1;
                 
                 //socket_set_option( $client, SOL_SOCKET, SO_RCVTIMEO, array( "sec"=>2,"usec"=>0 ) );
-                socket_recv( $client, $userpass, $estimated_size, MSG_WAITALL );
-                //while( ( $userpass = socket_read( $client, $estimated_size ) ) === 0 );
-                
-                
-                if( $userpass == 0 ){
-                    // Peer probably disconnected with use.
-                    echo socket_strerror(socket_last_error()) . "\n";;
-                    socket_close( $client );
+                $userpass = socket_read( $client, $estimated_size );                          
+                if( $userpass == false ){
+                    // Peer probably disconnected with use.                   
                     return;
                 }
                 
                 list( $username, $password ) = explode( ':', $userpass );
-                echo "$userpass.\n";
-                if( strlen( $username ) <= Config::MAX_USERNAME_SIZE && strlen( $username ) <= Config::MAX_PASSWORD_SIZE ){
-                    echo "Interface client failed to authenticate becuase of userpass lenght exceeding limits in config.php.\n";
-                }
-                        
+                                   
                 if( Config::INTERFACE_USERNAME == $username && Config::INTERFACE_PASSWORD == $password ){
                     // Yeah we got a connection send a success to peer and and client to list
                     socket_write( $client, pack( 'C', self::SUCCESS ), 1 );
-                    array_push( $this->interface_clients, $client );
-                                        
-                    socket_getpeername ( $client, $addr, $port ); 
-                    echo "Client $addr:$port has successfully connected to the Daemon's interface.\n";
+                    array_push( $this->interface_clients, $client );                                
+                    
+                    $msg = "Client $addr:$port has successfully connected to the Daemon's interface.";
+                    logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );                    
                 }else{
                     // failed
-                    // TODO logger
-                    socket_write( $client, pack( 'C', self::FAILURE ), 1 );
-                    socket_close( $client );
+                    $msg = "Authenticate failed.";
+                    logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );
+                    socket_write( $client, pack( 'C', self::FAILURE ), 1 );                    
                     return;
                 }
             }                 
@@ -1202,54 +1142,67 @@ class Daemon{
                     //
                     $torrent_info = Torrent::getTorrentInfoFromSource( $torrent_path );
                     if( !$torrent_info ){
-                        $opt_err = "Operation error: failed to read torrent $torrent_path.\n";
-                        debug_print_backtrace();
-                        echo $opt_err;
-                        socket_write( $client, $opt_err, strlen( $opt_err ) );
+                        $opt_err = "Operation error: failed to read torrent $torrent_path.";
+                        logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $opt_err );                        
+                        socket_write( $client, pack( 'C', self::FAILURE ), 1 );
+                        return;
+                    }
+                    
+                    if( $this->database_handler->getTorrent( $torrent_info->info_hash ) ){
+                        $msg = "Operation error: torrent, {$torrent_info->info_hash}, already exist.";     
+                        logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );
+                        socket_write( $client, pack( 'C', self::FAILURE ), 1 ); 
                         return;
                     }
                     
                     // Create file(s)
                     $success = Storage::createStorage( $torrent_info->files, $destination_path );
                     if( !$success ){
-                        $opt_err = "Operation error: failed to create file(s) for torrent..\n";     
-                        echo $opt_err;
-                        socket_write( $client, $opt_err, strlen( $opt_err ) );
+                        $opt_err = "Operation error: failed to create file(s) for torrent.";     
+                        logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $opt_err );
+                        socket_write( $client, pack( 'C', self::FAILURE ), 1 );
                         return;                
                     }
                     
                     if( $active != 0  && $active != 1 ){ 
                         // not a valid number, set to zero
+                        $opt_err = "Operation warning: the 'active' option needs to be set to 0(false) or 1(true), got $active. Using 0";     
+                        logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $opt_err );
                         $active = 0;
                     }
                     $torrent_info->active = $active;
                     $torrent_info->destination = $destination_path;
                     
                     // Add torrent_info to database  
-                    $this->addTorrentToDatabase( $torrent_info );
+                    $this->database_handler->addTorrentToDatabase( $torrent_info );
+                    $msg = "Torrent, {$torrent_info->info_hash}, has been added to the database..";     
+                    logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );
                     
                     if( count( $torrent_info_list ) < Config::MAX_ACTIVE_RUNNING_TORRENTS && $active == 1 ){
                         // Since were in the limit lets start running the torrent
+                        $msg = "Torrent, {$torrent_info->info_hash}, will be started now.";     
+                        logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );
                         $torrent_info_list->add( $torrent_info );
                     }
                     
-                    socket_write( $client, 'success', 7 );                    
-                    echo "Torrent ,{$torrent_info->info_hash}, has been added.\n";                    
+                    socket_write( $client, pack( 'C', self::SUCCESS ), 1 );                
                     break;
                 case Operation::REMOVE_TORRENT:
                     $torrent_info_hash = socket_read( $client, 40 );
                     $delete_files = socket_read( $client, 1 );
                                        
                     // Find the torrent
-                    if( !( $torrent_info = $this->getTorrent( $torrent_info_hash ) ) ){
-                        $opt_err = "Operation error: couldn't delete torrent cuase it does not exist.\n"; 
-                        echo $opt_err;
-                        socket_write( $client, $opt_err, strlen( $opt_err ) );                        
+                    if( !( $torrent_info = $this->database_handler->getTorrent( $torrent_info_hash ) ) ){
+                        $msg = "Operation error: couldn't delete torrent, {$torrent_info->info_hash}, cuase it does not exist.";     
+                        logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );
+                        socket_write( $client, pack( 'C', self::FAILURE ), 1 ); 
+                        return;
                     }
                     
                     // If the torrent is active there is a chance that it's running right now
                     foreach( $peer_info_list as $key=>$peer_info ){
                         if( $torrent_info->info_hash == $peer_info->info_hash ){
+                            // Disconnect all peers                            
                             unset( $peer_info_list[ $key ] );
                         }
                     }                        
@@ -1257,42 +1210,55 @@ class Daemon{
                     $torrent_info_list->remove( $torrent_info->info_hash );
                                                           
                     // Remove torrent from the database
-                    $this->removeTorrentFromDatabase( $torrent_info );
+                    $this->database_handler->removeTorrentFromDatabase( $torrent_info );
+                    $msg = "Removed torrent, {$torrent_info->info_hash}, from database.";     
+                    logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );
                     
                     // Finally Roemove files if $delete_files is set to 1/true   
                     if( $delete_files == true ){
                         Storage::deleteStorage( $torrent_info );
+                        $msg = "Deleted any files belonging to torrent, {$torrent_info->info_hash}.";     
+                        logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );
                     } 
                     
-                    // wait we also gotta to add a free active torrent to the torrent list
+                    // Gotta to add a free active torrent to the torrent list TODO
                     $need = Config::MAX_ACTIVE_RUNNING_TORRENTS - count( $torrent_info_list );
-                    $torrent_info_list->addList( $this->getActiveTorrents( Config::MAX_ACTIVE_RUNNING_TORRENTS ), $need  );
+                    $torrent_info_list->addList( $this->database_handler->getActiveTorrents( Config::MAX_ACTIVE_RUNNING_TORRENTS ), $need  );
                     
-                    socket_write( $client, 'success', 7 ); 
-                    echo "Torrent ,{$torrent_info->info_hash}, has been Deleted.\n";
+                    $msg = "Torrent, {$torrent_info->info_hash},Successfully deleted.";     
+                    logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );
+                    socket_write( $client, pack( 'C', self::SUCCESS ), 1 );                    
                     break;
                 case Operation::ACTIVATE_TORRENT:
                     $torrent_info_hash = socket_read( $client, 40 );
                     
-                    if( !( $torrent_info = $this->getTorrent( $torrent_info_hash ) ) ){
-                        $opt_err = "Operation error: Couldn't activate torrent $torrent_info_hash. Torrent does not exist.\n"; 
-                        echo $opt_err;                       
+                    if( !( $torrent_info = $this->database_handler->getTorrent( $torrent_info_hash ) ) ){
+                        $opt_err = "Operation error: Couldn't activate torrent $torrent_info_hash. Torrent does not exist.\n";                        
+                        logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $opt_err );
+                        socket_write( $client, pack( 'C', self::FAILURE ), 1 );
+                        return;
                     }
                     
-                    $this->activateTorrent( $torrent_info );
+                    $this->database_handler->activateTorrent( $torrent_info );
                     
                     // Try to add it to the torrent list
                     if( count( $torrent_info_list ) < Config::MAX_ACTIVE_RUNNING_TORRENTS ){                        
                         $torrent_info_list->add( $torrent_info );
                     }
                     
-                    echo "Torrent ,{$torrent_info->info_hash}, has been activated.\n";
+                    $msg = "Torrent ,{$torrent_info->info_hash}, has been activated.";                        
+                    logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );
+                    
+                    socket_write( $client, pack( 'C', self::SUCCESS ), 1 );
                     break;        
                 case Operation::DEACTIVATE_TORRENT:
                     $torrent_info_hash = socket_read( $client, 40 );
-                    if( !( $torrent_info = $this->getTorrent( $torrent_info_hash ) ) ){
-                        $opt_err = "Operation error: Couldn't deactivate torrent $torrent_info_hash. Torrent does not exist.\n"; 
-                        echo $opt_err;                       
+                    
+                    if( !( $torrent_info = $this->database_handler->getTorrent( $torrent_info_hash ) ) ){
+                        $opt_err = "Operation error: Couldn't deactivate torrent $torrent_info_hash. Torrent does not exist.\n";                        
+                        logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $opt_err );
+                        socket_write( $client, pack( 'C', self::FAILURE ), 1 );
+                        return;
                     }
                     
                     // If the torrent is active there is a chance that it's running right now
@@ -1303,24 +1269,34 @@ class Daemon{
                     }
                     $torrent_info_list->remove( $torrent_info->info_hash );
                     
-                    $this->deactivateTorrent( $torrent_info );
+                    $this->database_handler->deactivateTorrent( $torrent_info );
                     
                     // We jusy need to find a free active torrent to take its place
                     $need = Config::MAX_ACTIVE_RUNNING_TORRENTS - count( $torrent_info_list );
-                    $torrent_info_list->addList( $this->getActiveTorrents( Config::MAX_ACTIVE_RUNNING_TORRENTS ), $need  );                           
+                    $torrent_info_list->addList( $this->database_handler->getActiveTorrents( Config::MAX_ACTIVE_RUNNING_TORRENTS ), $need  );                           
                     
-                    echo "Torrent ,{$torrent_info->info_hash}, has been deactivated.\n";
-                    break;
+                    $msg = "Torrent ,{$torrent_info->info_hash}, has been deactivated.";                        
+                    logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );
                     
+                    socket_write( $client, pack( 'C', self::SUCCESS ), 1 );
+                    break;                    
                 case Operation::DISPLAY_ALL_RUNNING_TORRENTS:
                     $json_data = json_encode( $torrent_info_list );                    
                     socket_write( $client, $json_data, strlen( $json_data ) ); 
+                    
+                    $total = count( $torrent_info_list );
+                    $msg = "Sent out a list of running torrents that totals $total torrent(s).";                        
+                    logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );
                     break;
                 case Operation::DISPLAY_ALL_TORRENTS:
+                    $torrents = $this->database_handler->getAllTorrents();
                     // Display the information in json
-                    $json_data = json_encode( $this->getAllTorrents() );
-                    // write back
-                    socket_write( $client, $json_data, strlen( $json_data ) );               
+                    $json_data = json_encode( $torrents );                    
+                    socket_write( $client, $json_data, strlen( $json_data ) );
+                    
+                    $total = count( $torrents );
+                    $msg = "Sent out a list of torrents in database that totals $total torrent(s).";                        
+                    logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );
                     break;
                 default:
                     // TODO disconnect on too many bad operations in a row
@@ -1350,34 +1326,14 @@ class Daemon{
             return false;
         }
     }
-    
-    /**
-     * Switch a bit at a spicific location from 0 to 1
-     * @note The index of 0 starts at the beginning.
-     * @param $binary_string
-     * @param $bit_index
-     * @return Edited Binary String
-     */
-    private function flipBitOn( $binary_string, $bit_index ){
-        $binary_array = unpack( 'C*', $binary_string );                           
         
-        // arrays from unpack starts with index 1
-        $real_idx = floor( $bit_index / 8 ) + 1; // The byte(char) index
-        $value = $binary_array[ $real_idx ];
-                            
-        $value = $value | ( 128 >> ( $bit_index % 8 ) );
-        $binary_array[ $real_idx ] = $value;
-        // repack and return new string
-        return call_user_func_array( 'pack', array_merge( array( 'C*' ), $binary_array ) );    
-    }
-    
     /**
      * Gather information about completed pieces and total filesize
      * to determine how many bytes are left for the torrent.
      * @param TorrentInformation
      * @return The number of bytes left.
      */
-    private function BytesLeft( TorrentInformation $torrent_info ){                
+    private function bytesLeft( TorrentInformation $torrent_info ){                
         $total_filesize = $torrent_info->files->getTotalFileSize();        
         $has_left = $total_filesize;
         
@@ -1386,7 +1342,7 @@ class Daemon{
         for( $i = 0; $i < $bits; ++$i ){
             if( $torrent_info->bitfield[ $i ] == true ){
                 if( $i == $bits - 1 && ( $reminder = $total_filesize % $torrent_info->piece_length ) > 0 ){
-                    // The last bit might is a different size
+                    // The last bit might is a different size                    
                     $has_left -= $reminder;
                     continue;
                 }
@@ -1394,244 +1350,20 @@ class Daemon{
             }
         }          
         
-        $msg = "Torrent, {$torrent_info->info_hash}, has $has_left byte(s) left.";
+        $percent = round( ( $total_filesize - $has_left ) / $total_filesize, 2 ) * 100;
+        $msg = "Torrent, {$torrent_info->info_hash}, has $has_left byte(s) left( $percent% completion ).";
         logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );
         
         return $has_left;               
     }
     
     
-    /**
-     * Algorithm to get torrents that can be worked on right away.
-     * This means torrent must be started(active)...
-     * @throws     
-     * @param $limit
-     * @returns A list of torrents will be returned 
-     */
-    private function getActiveTorrents( $limit ){
-        $torrent_list = array();    
-        
-        $stmt = $this->db_conn->prepare( "
-        SELECT 
-            *
-        FROM Torrents        
-        WHERE active = 1        
-        ORDER BY RANDOM() LIMIT ?;" );
-        
-        $stmt->bindParam( 1, $limit, SQLITE3_INTEGER );          
-        $results = $stmt->execute();
-        
-        return $this->buildTorrentInfoHelper( $results );
-    }
-            
-    /**
-     * Get a specific torrent.  
-     * @param $info_hash 
-     * @return A TorrentInformation object.
-     */
-    private function getTorrent( $info_hash ){
-           
-        $stmt = $this->db_conn->prepare( "
-        SELECT 
-            *
-        FROM Torrents          
-        WHERE info_hash = ?;" );
-        
-        $stmt->bindParam( 1, $info_hash, SQLITE3_TEXT );          
-        $results = $stmt->execute();
-        
-        return $this->buildTorrentInfoHelper( $results )[ 0 ];
-    }
-    
-    /**
-     * Get all torrents, active or not. EVERTHING.
-     * @returns TorrentInformationList.
-     */
-    private function getAllTorrents(){
-        $results = $this->db_conn->query( "SELECT * FROM Torrents;" );            
-        return $this->buildTorrentInfoHelper( $results );         
-    } 
-     
-    /**
-     * This function reduces duplication of code.
-     * Basically this function continues to build
-     * the TorrentInformation object using the database.
-     * @returns TorrentInformationList
-     */
-    private function buildTorrentInfoHelper( $results ){       
-         
-        $torrent_info_list = new TorrentInformationList;
-        while( $row = $results->fetchArray( SQLITE3_ASSOC ) ){
-            $torrent_info = new TorrentInformation;
-            $torrent_info->info_hash    = $row[ 'info_hash' ];
-            $torrent_info->name         = $row[ 'name' ];
-            $torrent_info->pieces       = $row[ 'pieces' ];
-            $torrent_info->piece_length = $row[ 'piece_length' ];  
-            $torrent_info->private      = $row[ 'is_private' ];  
-            // storage
-            $torrent_info->destination  = $row[ 'destination' ];
-            // Statistics
-            $torrent_info->bytes_left       = $row[ 'bytes_left' ];
-            $torrent_info->bytes_uploaded   = $row[ 'bytes_uploaded' ];
-            $torrent_info->bytes_downloaded = $row[ 'bytes_downloaded' ];
-            $torrent_info_list->add( $torrent_info );            
-        }        
-        
-        
-        foreach( $torrent_info_list as &$torrent_info ){
-            // Announce
-            $stmt = $this->db_conn->prepare( "SELECT * FROM AnnounceUrls WHERE info_hash = ?;" );
-            $stmt->bindParam( 1, $torrent_info->info_hash, SQLITE3_TEXT );
-            $results = $stmt->execute();
-            
-            $announce_info_list = new AnnounceInformationList;
-            while( $row = $results->fetchArray( SQLITE3_ASSOC ) ){
-                $announce_info = new AnnounceInformation;
-                $announce_info->url = $row[ "url" ];      
-                $announce_info_list->add( $announce_info );                
-            }            
-            $torrent_info->announce_infos = $announce_info_list;
-                        
-            
-            $stmt = $this->db_conn->prepare( "SELECT * FROM Files WHERE info_hash = ?;" );
-            $stmt->bindParam( 1, $torrent_info->info_hash, SQLITE3_TEXT );
-            $results = $stmt->execute();
-            
-            $file_info_list = new FileInformationList;
-            while( $row = $results->fetchArray( SQLITE3_ASSOC ) ){
-                $file_info = new FileInformation;
-                $file_info->name = $row[ "filename" ];    
-                $file_info->size = $row[ "filesize" ];
-                $file_info_list->add( $file_info );               
-            }            
-            $torrent_info->files = $file_info_list;            
-        }
-               
-        return $torrent_info_list;        
-    }   
-    
-    /**
-     * 
-     */
-    private function removeTorrentFromDatabase( TorrentInformation $torrent_info ){        
-        $this->db_conn->exec( 'PRAGMA foreign_keys = ON;' );        
-        $stmt = $this->db_conn->prepare( "DELETE FROM Torrents WHERE info_hash = ?;" );        
-        $stmt->bindParam( 1, $torrent_info->info_hash, SQLITE3_TEXT );          
-        $results = $stmt->execute();
-    }
-    
-    /**
-     * 
-     */
-    private function activateTorrent( TorrentInformation $torrent_info ){           
-        $stmt = $this->db_conn->prepare( "UPDATE Torrents SET active = ? WHERE info_hash = ?;" );    
-        $active = 1;
-        $stmt->bindParam( 1, $active, SQLITE3_INTEGER );      
-        $stmt->bindParam( 2, $torrent_info->info_hash, SQLITE3_TEXT ); 
-        $results = $stmt->execute();
-    }
-    
-    /**
-     * 
-     */
-    private function deactivateTorrent( TorrentInformation $torrent_info ){           
-        $stmt = $this->db_conn->prepare( "UPDATE Torrents SET active = ? WHERE info_hash = ?;" );    
-        $active = 0;
-        $stmt->bindParam( 1, $active, SQLITE3_INTEGER );      
-        $stmt->bindParam( 2, $torrent_info->info_hash, SQLITE3_TEXT ); 
-        $results = $stmt->execute();
-    }
-    
-    /**
-     * 
-     */
-    private function addStatisticsToDatabase( TorrentInformationList $torrent_info_list ){
-        foreach( $torrent_info_list as $torrent_info ){
-            $stmt = $this->db_conn->prepare( "UPDATE Torrents SET bytes_downloaded = ?, bytes_uploaded = ?, bytes_left = ? WHERE info_hash = ?;" );   
-            $stmt->bindParam( 1, $torrent_info->bytes_downloaded, SQLITE3_INTEGER );
-            $stmt->bindParam( 2, $torrent_info->bytes_uploaded, SQLITE3_INTEGER );
-            $stmt->bindParam( 3, $torrent_info->bytes_left, SQLITE3_INTEGER );
-            $stmt->bindParam( 4, $torrent_info->info_hash, SQLITE3_TEXT );
-            $stmt->execute();
-            $stmt->close();            
-        }             
-    }
-    
-    
-    /**
-     * Using the database get all the announce urls for a specific torrent.
-     * @deprecated
-     * @returns An array of urls from the torrent
-     */
-    private function getAnnounceUrls( $info_hash ){
-        $announce_list = array();
-        
-        $stmt = $this->db_conn->prepare( "SELECT url FROM AnnounceUrls WHERE info_hash = ? ORDER BY rank DESC" );
-        $stmt->bindParam( 1, $info_hash, SQLITE3_TEXT );  
-        
-        $results = $stmt->execute();
-        while( $row = $results->fetchArray( SQLITE3_ASSOC ) ){
-            array_push( $announce_list, $row[ "url" ] );
-        }        
-        
-        $stmt->close();      
-        
-        return $announce_list;
-    }
-    
-    
-    /**
-     * Add torrent and other things to the database
-     * @throws     
-     * @bug not a bug with this program but the phptracker. anounce is showing as an array.
-     * plus it shows up twice, one in announce and another in announce-list
-     */
-    private function addTorrentToDatabase( $torrent_info ){
-        
-        $total_length = 0;
-        foreach( $torrent_info->files AS $file_info ){ 
-            $total_length += $file_info->size;            
-        }     
-            
-        // Add main torrent infomation into database
-        $count = 0;
-        $stmt = $this->db_conn->prepare( 'INSERT INTO Torrents( info_hash, name, piece_length, pieces, destination, bytes_left, active ) VALUES( ?, ?, ?, ?, ?, ?, ? );' );        
-        $stmt->bindParam( ++$count, $torrent_info->info_hash, SQLITE3_TEXT );  
-        $stmt->bindParam( ++$count, $torrent_info->name, SQLITE3_TEXT );
-        $stmt->bindParam( ++$count, $torrent_info->piece_length, SQLITE3_INTEGER );
-        $stmt->bindParam( ++$count, $torrent_info->pieces, SQLITE3_BLOB );
-        $stmt->bindParam( ++$count, $torrent_info->destination, SQLITE3_TEXT );
-        $stmt->bindParam( ++$count, $total_length, SQLITE3_INTEGER ); 
-        $stmt->bindParam( ++$count, $torrent_info->active, SQLITE3_INTEGER ); 
-        $stmt->execute();        
-        
-        // Add file(s) to the database 
-        $stmt = $this->db_conn->prepare( 'INSERT INTO Files( info_hash, filename, filesize ) VALUES( ?, ?, ? );' );        
-        foreach( $torrent_info->files AS $file_info ){             
-            $count = 0;
-            $stmt->bindParam( ++$count, $torrent_info->info_hash, SQLITE3_TEXT );        
-            $stmt->bindParam( ++$count, $file_info->name, SQLITE3_TEXT );
-            $stmt->bindParam( ++$count, $file_info->size, SQLITE3_INTEGER );
-            $stmt->execute();
-        } 
-                       
-        // Add all announce urls to the database for the torrent
-        $stmt = $this->db_conn->prepare( 'INSERT OR IGNORE INTO AnnounceUrls( info_hash, url ) VALUES( ?, ? );' );  
-        foreach( $torrent_info->announce_infos AS $announce_info ){            
-            $count = 0;
-            $stmt->bindParam( ++$count, $torrent_info->info_hash, SQLITE3_TEXT );
-            if( is_array( $announce_info->url ) ){
-                $announce_info->url = $announce_info->url[ 0 ];
-            }
-            $stmt->bindParam( ++$count, $announce_info->url, SQLITE3_TEXT );            
-            $stmt->execute();
-        } 
-       
-    }
     //----------------
     
     /**
-     * Open a socket to the HTTP tracker
+     * Open a socket to the HTTP tracker.
+     * The whole operation use states, to finally
+     * determine connection.
      *     
      * @param &AnnounceInformation    
      * @return True if conneced, or false if not connected YET or timedout.
@@ -1640,14 +1372,14 @@ class Daemon{
         $url_comp = parse_url( $announce_info->url ); 
         
         if( !isset( $announce_info->address ) ){         
-            // The real address is not set yet
-            $announce_info->address = gethostbyname( $url_comp[ "host" ] ); // NOTE at times this is slow            
+            // The real address is not set yet, set it so we don't run this again
+            $announce_info->address = gethostbyname( $url_comp[ "host" ] ); // NOTE at times this can be slow            
             if( !filter_var( $announce_info->address, FILTER_VALIDATE_IP ) ){
                 // Can't get ip address, don't bother
                 $msg = "Can't get ip address from tracker {$announce_info->url}";
                 logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );
                 
-                ++$announce_info->number_of_failed_connections;
+                $announce_info->connection_failed = true;
                 return false;
             }           
         }
@@ -1667,26 +1399,28 @@ class Daemon{
         }
         
         if( $announce_info->is_connecting ){           
-            while( !( $result = @socket_connect( $announce_info->resource, $announce_info->address, $port ) ) ){  
-                //NOTE even though it's nonblocking at curtian times it stalls for a view seconds            
+            while( !( $result = @socket_connect( $announce_info->resource, $announce_info->address, $port ) ) ){               
                 if( ( time() - $announce_info->conection_timeout ) >= 5 ){     
-                    echo "Connection to tracker, {$announce_info->url}, timed out.\n";    
+                    $msg = "Connection to tracker, {$announce_info->url}, timed out.";
+                    logger::logMessage( self::PROGRAM_NAME, Logger::STATUS, $msg );
+                
+                    echo "\n";    
                     $announce_info->is_connected = false;
                     $announce_info->is_connecting = false;
-                    ++$announce_info->number_of_failed_connections;
+                    $announce_info->connection_failed = true;
                     return false;
                 }                
             }
-            if( $result ){
-                // We are connected
-                $msg = "Tracker, {$announce_info->url}, successfully connected.";
-                logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );                
-                
-                socket_set_block( $announce_info->resource );
-                $announce_info->is_connected = true;
-                $announce_info->is_connecting = false;   
-                return true;                
-            }        
+            
+            // We are connected
+            $msg = "Tracker, {$announce_info->url}, successfully connected.";
+            logger::logMessage( self::PROGRAM_NAME, Logger::STATUS, $msg );                
+            
+            socket_set_block( $announce_info->resource );
+            $announce_info->is_connected = true;
+            $announce_info->is_connecting = false;   
+            return true;                
+            
         }
         return false;
     }
@@ -1699,16 +1433,12 @@ class Daemon{
      * @param &AnnounceInformation    
      *
      */    
-    private function sendTrackerRequest_HTTP( TorrentInformation &$torrent_info, AnnounceInformation &$announce_info, $my_port ){
-        
-        $url_comp = parse_url( $announce_info->url );     
-        $address = gethostbyname( $url_comp[ "host" ] );
-        $path = $url_comp[ "path" ];                       
+    private function sendTrackerRequest_HTTP( TorrentInformation &$torrent_info, AnnounceInformation &$announce_info, $my_port ){        
+        $url_comp = parse_url( $announce_info->url );        
         
         if( $announce_info->is_connected ){
-            $read = array( $announce_info->resource );
-                  
-            if( socket_select( $read, $write, $except, 0 ) > 0 ){
+            $read = array( $announce_info->resource );            
+            if( socket_select( $read, $write, $except, 0 ) > 0 ){ // NOTE note sure about this
                 // Don't write any data while there is data in the read buffer
                 return;
             }   
@@ -1718,7 +1448,7 @@ class Daemon{
                 array(        
                     'info_hash' => pack( "H*", $torrent_info->info_hash ),
                     'peer_id' => $this->peer_id,
-                    'event' => 'started', // TODO on the tracker project
+                    'event' => 'started', // TODO on the PHPtracker project
                     //'compact' => 0,
                     'numwant' => Config::TRACKER_NUMWANT,
                     'port' =>  $my_port,
@@ -1730,15 +1460,11 @@ class Daemon{
          
             // TODO fix / TODO follow 301 redirects? /TODO Some tracker redirects back to me
             $out = "";
-            $out .= "GET $path/?$getdata HTTP/1.1\r\n";
+            $out .= "GET {$url_comp["path"]}/?$getdata HTTP/1.1\r\n";
             $out .= "Host: {$url_comp["host"]}\r\n";            
             $out .= "Connection: keep-alive\r\n\r\n";
-            
-            
-            socket_write( $announce_info->resource, $out, strlen( $out ) );  
-            
-            //$msg = "Sent {$url_comp["host"]} $path/?$getdata to tracker {$announce_info->url}";
-            //logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );
+                       
+            socket_write( $announce_info->resource, $out, strlen( $out ) );              
         }       
     }         
     
@@ -1750,9 +1476,7 @@ class Daemon{
      */    
     private function recieveTrackerResponse_HTTP( AnnounceInformation &$announce_info ){
         if( $announce_info->is_connected ){
-            $read = array( $announce_info->resource );
-            $write = null;
-            $except = null;
+            $read = array( $announce_info->resource );            
             
             if( socket_select( $read, $write, $except, 0 ) > 0 ){             
                 $raw_http = socket_read( $announce_info->resource, 2048 );                  
@@ -1763,11 +1487,12 @@ class Daemon{
                 // parse response message
                 try{
                     $tracker_response = Bencode::decode( $raw_response );
-                }catch( Exception $e ){                    
-                    echo "Error getting response from {$announce_info->url} $raw_response $raw_http\n";
-                    $announce_info->interval = 128;
-                    $announce_info->last_access_time = time();                    
-                    // TODO 
+                }catch( Exception $e ){    
+                    $msg = "Error getting response from {$announce_info->url} $raw_response $raw_http.";
+                    logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );        
+                    
+                    $announce_info->bad_response = true;
+                    
                     return false;
                 }  
                 
@@ -1785,8 +1510,7 @@ class Daemon{
                         array_push( $temp_array, $peer );                             
                     }
                     $tracker_response[ 'peers' ] = $temp_array;                       
-                }
-                
+                }                
                 
                 return $tracker_response;
             }else{
@@ -1819,15 +1543,17 @@ class Daemon{
                 $msg = "Can't get ip address from tracker {$announce_info->url}";
                 logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );
                 
-                ++$announce_info->number_of_failed_connections;
+                $announce_info->connection_failed = true;
                 return false;
             }           
         }        
                 
         if( !isset( $url_comp[ "port" ] ) ){
             // Port is needed
-            echo "UDP Tracker, {$announce_info->address}, doesn't have a port number.\n";
-            ++$announce_info->number_of_failed_connections;
+            $msg = "UDP Tracker, {$announce_info->address}, doesn't have a port number.";
+            logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );
+            
+            $announce_info->connection_failed = true;
             return false;
         }
         $port = $url_comp[ "port" ];
@@ -1845,49 +1571,52 @@ class Daemon{
         
         if( $announce_info->is_connecting && !$announce_info->partial_connect ){                                
             while( !( $result = @socket_connect( $announce_info->resource, $announce_info->address, $port ) ) ){                
-                if( ( time() - $announce_info->conection_timeout ) >= config::TRACKER_CONNECTION_TIMEOUT ){     
-                    echo "Connection to tracker, {$announce_info->url}, timed out.\n";                      
+                if( ( time() - $announce_info->conection_timeout ) >= config::TRACKER_CONNECTION_TIMEOUT ){   
+                    $msg = "Connection to tracker, {$announce_info->url}, timed out.";
+                    logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );                    
+                          
                     $announce_info->is_connecting = false;                      
-                    ++$announce_info->number_of_failed_connections;
+                    $announce_info->connection_failed = true;
                     return false;
                 }                
-            }
+            }            
+           
+            // We are connected but not really                
+            socket_set_block( $announce_info->resource );                
+            $announce_info->partial_connect = true;                
             
-            if( $result ){
-                // We are connected but not really                
-                socket_set_block( $announce_info->resource );                
-                $announce_info->partial_connect = true;                
-                
-                // Send connection input
-                $connect_id = "\x00\x00\x04\x17\x27\x10\x19\x80";            
-                $transaction_id = mt_rand( 0, 65535 );
-                $connect_msg = 
-                    $connect_id . // connection_id
-                    pack( 'N', 0 ) .              // action
-                    pack( 'N', $transaction_id )  // transaction_id 
-                ;        
-                socket_write( $announce_info->resource, $connect_msg, strlen( $connect_msg ) );
-            }        
-        }
-        
+            // Send connection input
+            $connect_id = "\x00\x00\x04\x17\x27\x10\x19\x80";            
+            $transaction_id = mt_rand( 0, 65535 );
+            $connect_msg = 
+                $connect_id . // connection_id
+                pack( 'N', 0 ) .              // action
+                pack( 'N', $transaction_id )  // transaction_id 
+            ;        
+            socket_write( $announce_info->resource, $connect_msg, strlen( $connect_msg ) );            
+        }        
         
         if( $announce_info->partial_connect ){ 
             // Need the connection id from the tracker to complete the connection
             
-            $read = array( $announce_info->resource );
-            $write = null;
-            $except = null;            
+            $read = array( $announce_info->resource );    
+            
             if( socket_select( $read, $write, $except, 0 ) > 0 ){
                 // This might be the connection output
                 $raw_response = socket_read( $announce_info->resource, 16 ); 
                 if( strlen( $raw_response ) != 16 ){
-                    socket_close( $announce_info->resource );
-                    ++$announce_info->number_of_failed_connections;
-                    echo "Tracker, {$announce_info->url}, connect output is wrong.\n"; 
+                    socket_close( $announce_info->resource );                    
+                    
+                    $msg = "Tracker, {$announce_info->url}, connect output is wrong.";
+                    logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );  
+                    
+                    $announce_info->connection_failed = true;
                     return false;
                 }
                 
-                echo "Tracker, {$announce_info->url}, connected.\n";
+                $msg = "Tracker, {$announce_info->url}, connected.";
+                logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );  
+                
                 $announce_info->udp_connect_id = substr( $raw_response, 8, 8 );
                 $announce_info->is_connected = true;
                 $announce_info->partial_connect = false;
@@ -1898,8 +1627,11 @@ class Daemon{
                     $announce_info->is_connecting = false;   
                     $announce_info->partial_connect = false;       
                     socket_close( $announce_info->resource );
-                    echo "Connection to tracker, {$announce_info->url}, timed out.\n";
-                    ++$announce_info->number_of_failed_connections;
+                    
+                    $msg = "Connection to tracker, {$announce_info->url}, timed out.";
+                    logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );                    
+                    
+                    $announce_info->connection_failed = true;
                     return false;
                 }
                  // Nothing yet
@@ -1919,8 +1651,7 @@ class Daemon{
      */
     private function sendTrackerRequest_UDP( TorrentInformation &$torrent_info, AnnounceInformation &$announce_info, $my_port ){  
         $read = array( $announce_info->resource );
-        $write = null;
-        $except = null;            
+             
         if( socket_select( $read, $write, $except, 0 ) > 0 ){
             // No data yet
             return false;
@@ -1962,8 +1693,7 @@ class Daemon{
      */
     private function recieveTrackerResponse_UDP( AnnounceInformation &$announce_info ){     
         $read = array( $announce_info->resource );
-        $write = null;
-        $except = null;            
+            
         if( socket_select( $read, $write, $except, 0 ) == 0 ){
             // No data yet
             return false;
@@ -2002,9 +1732,9 @@ class Daemon{
                 $error_msg = strstr( $raw_response, 8 );
                 $msg = "Error getting response from {$announce_info->url}, with message: $error_msg.";
                 logger::logMessage( self::PROGRAM_NAME, Logger::DEBUG, $msg );                
-                $announce_info->interval = 180;
-                $announce_info->last_access_time = time();                    
+                $announce_info->bad_response = true;                   
                 return false;
+                
                 break;
         };
                

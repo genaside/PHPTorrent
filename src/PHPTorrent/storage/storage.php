@@ -48,16 +48,44 @@ class Storage{
         return true;
     }
     
+    /**
+     * Remove all torrents.
+     * @param TorrentInformation $torrent_info
+     */
     public static function deleteStorage( TorrentInformation $torrent_info ){
         foreach( $torrent_info->files as $file ){
+            // delete file
             $full_path = $torrent_info->destination . DIRECTORY_SEPARATOR . $file->name;
             if( !file_exists( $full_path ) ){
                 continue;
             }      
             unlink( $full_path );
         }
+        
+        
         if( file_exists( $full_path = $torrent_info->destination . DIRECTORY_SEPARATOR . $torrent_info->name ) ){
-             unlink( $full_path );
+            // The main folder exists            
+            $iterator = new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator( 
+                    $full_path, 
+                    RecursiveDirectoryIterator::SKIP_DOTS |
+                    FilesystemIterator::KEY_AS_PATHNAME |
+                    FilesystemIterator::CURRENT_AS_FILEINFO
+                ),
+                RecursiveIteratorIterator::SELF_FIRST
+            );      
+            
+            foreach( $iterator as $key=>$file ){
+                // remove all sub folders                
+                if( $file->isDir() ){
+                    rmdir( $key );
+                }else if( $file->isFile() ){
+                    // At this point this is a file not handled by the torrent
+                    // TODO
+                }
+            }            
+            // Finaly delete the main folder
+            rmdir( $full_path );           
         }  
     }
     

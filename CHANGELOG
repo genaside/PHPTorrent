@@ -1,3 +1,12 @@
+version 0.0.03 alpha 
+---------------------
+- Added API to handle operations much easily
+- Moved all database operation from daemon.php to it's own file.
+- Fixed Problem where removing torrent with files, only fails get deleted but not folders
+- Removed using an illegal torrent as an example.
+- Minor changes
+
+
 version 0.0.02 alpha 
 ---------------------
 - Move the current folder contents in /src to /src/PHPTorrent

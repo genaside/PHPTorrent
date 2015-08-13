@@ -20,8 +20,8 @@ if( $status != 1 ){
 //$start_time = time();
 
 // Add a torrent
-//$torrent_source = "http://torcache.net/torrent/D1A4C166759C81886B88D227732F5952FB679610.torrent?title=[kat.cr]animerg.dragon.ball.super.001.720p.phr0sty.mkv";
-$torrent_source = "/home/god/Desktop/db_encyclopedia.tar.gz.torrent";
+$torrent_source = "http://linuxtracker.org/download.php?id=7063785beefd3a9816d3a279242d80f5a27a5390&f=kali_linux_1.1.0a_amd64_mini.torrent&key=6c2d037a";
+//$torrent_source = "/home/god/Desktop/db_encyclopedia.tar.gz.torrent";
 $download_destination = "/home/god/Downloads/";
 $active = true;
 

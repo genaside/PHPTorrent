@@ -11,6 +11,8 @@ require_once( __DIR__ . "/daemon/daemon.php" );
 require_once( __DIR__ . "/daemon/operation.php" );
 require_once( __DIR__ . "/config/config.php" );
 require_once( __DIR__ . "/storage/storage.php" );
+require_once( __DIR__ . "/database/database.php" );
+
 
 require_once( __DIR__ . "/structures/PeerInformation.php" );
 require_once( __DIR__ . "/structures/AnnounceInformation.php" );

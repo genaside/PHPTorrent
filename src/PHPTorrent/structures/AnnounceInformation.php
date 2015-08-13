@@ -65,19 +65,26 @@ class AnnounceInformation{
     public $is_connected = false;
     
     /**    
+     * @var bool
+     */
+    public $connection_failed = false;
+    
+    /**    
      * @var Interger
      */
     public $read_write_timeout;
     
     /**    
      * @var Interger
+     * @deprecated
      */
     public $number_of_failed_connections = 0;
     
     /**    
      * @var Interger
+     * @deprecated
      */
-    public $number_of_bad_respones = 0;
+    public $bad_response = false;
     
     /* ----- UDP ----- */ 
     

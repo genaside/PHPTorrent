@@ -147,6 +147,7 @@ class Config{
      * The amount of connection errors the tracker can give before before 
      * penalizing it.
      *
+     * @deprecated
      * @var int(unsigned)
      */
     const TRACKER_CONNECTION_ERROR_THRESHOLD = 1;
@@ -174,6 +175,7 @@ class Config{
      * This will tell the tracker that we  
      * want the peers in compact form.
      * If you don't know, think of it as reducing bandwith
+     * @deprecated
      * @var bool
      */
     const ENABLE_COMPACT_PEER = true;
@@ -190,7 +192,7 @@ class Config{
      *
      * @var int(unsigned)
      */
-    const MAX_ACTIVE_RUNNING_TORRENTS = 1;
+    const MAX_ACTIVE_RUNNING_TORRENTS = 2;
     
     /**
      * When a torrent is completed, a command pointed
@@ -212,7 +214,7 @@ class Config{
      *
      * @var int(unsigned)
      */
-    const MAX_PEERS_PER_TORRENT = 20;    
+    const MAX_PEERS_PER_TORRENT = 20; 
     
     /**
      * The amount of time that this client gets to connect to a peer 
@@ -264,7 +266,7 @@ class Config{
      * during circumstances
      * @var int(unsigned)
      */
-    const MAX_NUMBER_OF_PIECE_BUFFERS = 2;   
+    const MAX_NUMBER_OF_PIECE_BUFFERS = 1;   
     
     /**
      * A piece will be broken up into segments by MAX_BLOCK_REQUEST_LENGTH, and will
