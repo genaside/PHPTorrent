@@ -41,7 +41,7 @@ class Database{
         );          
         
         if( !$this->db_connection->exec( 'PRAGMA foreign_keys = ON;' ) ){
-            throw new exception( $this->db_connection->lastErrorMsg() );
+            throw new \Exception( $this->db_connection->lastErrorMsg() );
         }
     }
     
@@ -63,7 +63,7 @@ class Database{
     public function buildDatabase(){
         $sql = file_get_contents( dirname( __file__ ) . DIRECTORY_SEPARATOR . "tables.sql" );
         if( !$this->db_connection->exec( $sql ) ){
-            throw new exception( $this->db_connection->lastErrorMsg() );
+            throw new \Exception( $this->db_connection->lastErrorMsg() );
         }
     }     
     

@@ -176,7 +176,7 @@ class Storage{
         foreach( $torrent_info->files as $file ){
             $full_path = $torrent_info->destination . DIRECTORY_SEPARATOR . $file->name;
             if( !file_exists( $full_path ) ){
-                throw new Exception( "file does not exist." );
+                throw new \Exception( "file does not exist." );
             }            
             
             if( $seek >= $file->size ){
@@ -217,7 +217,7 @@ class Storage{
         foreach( $torrent_info->files as $file ){
             $full_path = $torrent_info->destination . DIRECTORY_SEPARATOR . $file->name;
             if( !file_exists( $full_path ) ){
-                throw new Exception( "file does not exist." );
+                throw new \Exception( "file does not exist." );
             }            
             
             if( $seek >= $file->size ){

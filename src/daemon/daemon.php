@@ -158,17 +158,17 @@ class Daemon
         $create_server_socket = function ($port_number) {
             $socket = @socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
             if (!$socket) {
-                //throw new exception( "Socket creation failed" );
+                //throw new \Exception( "Socket creation failed" );
                 return false;
             }
             $status = @socket_bind($socket, '127.0.0.1', $port_number);
             if (!$status) {
-                //throw new exception( "Socket binding failed" );
+                //throw new \Exception( "Socket binding failed" );
                 return false;
             }
             $status = @socket_listen($socket);
             if (!$status) {
-                //throw new exception( "Socket listener failed" );
+                //throw new \Exception( "Socket listener failed" );
                 return false;
             }
             return $socket;
