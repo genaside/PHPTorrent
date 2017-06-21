@@ -526,7 +526,7 @@ class Daemon
             */
 
             // Add statistics to database
-            if (($currentTime = time()) - $last_stat_update_time > Config::UPDATE_STATISTICS_INTERVERL) {
+            if (($currentTime = time()) - $last_stat_update_time > Config::UPDATE_STATISTICS_INTERVAL) {
                 // Add statistics to database
                 $this->database_handler->addStatisticsToDatabase($torrent_info_list);
                 $last_stat_update_time = $currentTime;
@@ -1491,7 +1491,7 @@ class Daemon
                     'peer_id' => $this->peer_id,
                     'event' => 'started', // TODO on the PHPtracker project
                     //'compact' => 0,
-                    'numwant' => Config::TRACKER_NUMWANT,
+                    'numwant' => Config::TRACKER_PEER_REQUESTS,
                     'port' => $my_port,
                     'uploaded' => $torrent_info->bytes_uploaded,
                     'downloaded' => $torrent_info->bytes_downloaded,
@@ -1719,7 +1719,7 @@ class Daemon
             pack('N', 0) .                         // event
             pack('N', ip2long('127.0.0.1')) . // IP address
             pack('N', 0) .                         // key
-            pack('N', Config::TRACKER_NUMWANT) .   // num_what TODO what
+            pack('N', Config::TRACKER_PEER_REQUESTS) .   // num_what TODO what
             pack('n', $my_port)                          // port
         ;
 
@@ -1746,7 +1746,7 @@ class Daemon
             return false;
         }
 
-        $n = Config::TRACKER_NUMWANT;
+        $n = Config::TRACKER_PEER_REQUESTS;
         $readlength = 20 + (6 * $n);
         $raw_response = socket_read($announce_info->resource, $readlength);
 

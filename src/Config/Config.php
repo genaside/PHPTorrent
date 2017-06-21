@@ -12,18 +12,17 @@ class Config
 
     /**
      * Port used for incoming connections made by peers. If a
-     * list/range is defined, then instead of the deamon failing
+     * list/range is defined, then instead of the daemon failing
      * on a port because it's used by another program, deamon
      * will run down the list finding the next available port to use.
      * Use commas between numbers to create a list, or dash to
      * select a range of numbers.
-     * For example '6881,7123' will set avalible ports 6881 and 7123,
+     * For example '6881,7123' will set available ports 6881 and 7123,
      * while '6881-6889' will search every port between 6881 and 6889
-     * for an avalible port to use. Also you can a combination
+     * for an available port to use. Also you can a combination
      * of commas and dashes, like  '6881-6889,7123'.
      *
-     * @note The string must contain numbers, with one comma or
-     * dashe between numbers.
+     * @note The string must contain numbers, with one comma or dashes between numbers.
      *
      * @var string
      */
@@ -35,7 +34,7 @@ class Config
      * A port used to control the behavior of the daemon
      * of this BitTorrent client.
      *
-     * @var int(unsigned)
+     * @var int (unsigned)
      */
     const CLIENT_INTERFACE_PORT = 7423;
 
@@ -43,7 +42,7 @@ class Config
      * Max number of open connections that can be made to the interface port.
      *
      * @note this might be deprecated to be just 1 always.
-     * @var int(unsigned)
+     * @var int (unsigned)
      */
     const MAX_INTERFACE_CONNECTIONS = 1;
 
@@ -100,7 +99,7 @@ class Config
      *
      * @var int(unsigned)
      */
-    const UPDATE_STATISTICS_INTERVERL = 10;
+    const UPDATE_STATISTICS_INTERVAL = 10;
 
 
     /* ----- Logger ----- */
@@ -112,14 +111,13 @@ class Config
     const ENABLE_LOGGING = true;
 
     /**
-     * The directory path for the log file. You can set file name
-     * as well.
+     * The directory path for the log file. You can set file name as well.
      * @var string
      */
     const LOGFILE_LOCATION = __DIR__ . "/../../resources/info.log";
 
     /**
-     * Enable logs to be sent to stdout(terminal) as well
+     * Enable logs to be sent to stdout (terminal) as well
      * @var bool
      */
     const ENABLE_LOGGING_ON_STDOUT = true;
@@ -130,7 +128,7 @@ class Config
      * 1 = Show basic daemon operations
      * 2 = Debugging, shows ALL messages.
      *
-     * @var int(unsigned)
+     * @var int (unsigned)
      */
     const LOG_LEVEL = 2;
 
@@ -142,7 +140,7 @@ class Config
      *
      * @note Take into account that waiting on a tracker for a long time will
      * make leeching/seeding suffer.     *
-     * @var int(unsigned)
+     * @var int (unsigned)
      */
     const TRACKER_CONNECTION_TIMEOUT = 5;
 
@@ -151,7 +149,7 @@ class Config
      * penalizing it.
      *
      * @deprecated
-     * @var int(unsigned)
+     * @var int (unsigned)
      */
     const TRACKER_CONNECTION_ERROR_THRESHOLD = 1;
 
@@ -159,50 +157,44 @@ class Config
      * The amount of bad responses the tracker can give before before
      * penalizing it.
      *
-     * @var int(unsigned)
+     * @var int (unsigned)
      */
-    const TRACKER_BAD_RESPONCE_THRESHOLD = 3;
+    const TRACKER_BAD_RESPONSE_THRESHOLD = 3;
 
     /**
      * The number of peer to ask each tracker for.
      *
      * @note after MAX_PEERS_PER_TORRENT is resolved extra tracker will be stored
      * for later use.
-     * @var int(unsigned)
+     * @var int (unsigned)
      */
-    const TRACKER_NUMWANT = 30;
+    const TRACKER_PEER_REQUESTS = 30;
 
     /* ----- NOTE still fixing this ----- */
 
     /**
-     * This will tell the tracker that we
-     * want the peers in compact form.
-     * If you don't know, think of it as reducing bandwith
+     * This will tell the tracker that we want the peers in compact form.
+     * If you don't know, think of it as reducing bandwidth.
      * @deprecated
      * @var bool
      */
     const ENABLE_COMPACT_PEER = true;
 
-
-    //const MAX_NUMBER_OF = 7423;
     const TTL = 180;
 
     /* ----- Torrent ----- */
 
     /**
-     * Max running(seeding/leeching) torrents that then
-     * daemon should handle.
+     * Max running (seeding/leeching) torrents that then daemon should handle.
      *
-     * @var int(unsigned)
+     * @var int (unsigned)
      */
     const MAX_ACTIVE_RUNNING_TORRENTS = 2;
 
     /**
-     * When a torrent is completed, a command pointed
-     * by this option will run.
+     * When a torrent is completed, a command pointed by this option will run.
      *
-     * @note "-t '$hash_ifo'" will be inserted at the end of the command
-     * for those who want to know which torrent finished
+     * @note "-t '$hash_ifo'" will be inserted at the end of the command for those who want to know which torrent finished.
      * @note value must be an empty string or a complete path to the script/command.
      * @note example: "php /path/to/command"
      * @var string
@@ -215,7 +207,7 @@ class Config
     /**
      * Max open peers per torrent
      *
-     * @var int(unsigned)
+     * @var int (unsigned)
      */
     const MAX_PEERS_PER_TORRENT = 20;
 
@@ -227,7 +219,7 @@ class Config
      * connection and to get the leaching/seeding process started.
      * A higher timeout will probably get more peers to work with,
      * but doubtful.
-     * @var int(unsigned)
+     * @var int (unsigned)
      */
     const PEER_CONNECTION_TIMEOUT = 1;
 
@@ -235,7 +227,7 @@ class Config
      * The amount of bad payloads that is willing to be tolerated from the peer.
      *
      * @note peer will be disconnected if threshold has been reached.
-     * @var int(unsigned)
+     * @var int (unsigned)
      */
     const PEER_BAD_DATA_THRESHOLD = 8;
 
@@ -247,27 +239,26 @@ class Config
      * should ask for the peer for.
      *
      * @note It seems that 32kib is the strict specification, and 16kb is "semi-official".
-     * However, the specs says that clients will automaticly close connection if asked to
-     * do paylod length greater than 128kib. To be safe use 16kb or 32kb.
-     * @note According to vuze, "16 kiB 'blocks', which are the actual
-     * smallest transmission units in the bittorent protocol."
+     * However, the specs says that clients will automatically close connection if asked to
+     * do payload length greater than 128kib. To be safe use 16kb or 32kb.
+     * @note According to Vuze, "16 kiB 'blocks', which are the actual
+     * smallest transmission units in the BitTorrent protocol."
      * @note Testing show that peers behave better with 16KiB, so it will be the default.
-     * @var int(unsigned)
+     * @var int (unsigned)
      */
     const MAX_BLOCK_REQUEST_LENGTH = 16384; // 16384 or 32768
 
     /**
-     * Well basicly I was getting 512kib/s on local torrents so i was wondering why so slow.
-     * I realize when iam sending a piece request by the time iam waiting
-     * I should send out more piesces, but to a limit.
-     * this option tells the program you can use up to N number of slots.
+     * Well basically I was getting 512kib/s on local torrents so I was wondering why it's so slow.
+     * I realized that when I am sending a piece request by the time I am waiting
+     * I should send out more pieces, but to a limit.
+     * This option tells the program you can use up to N number of slots.
      *
      * @warning I dont think the option should go more than 4, You might BREAK the peers.
      * I tested it at 48 and the torrent downloads fast ~20Mib, but the local peer( ktorrent )
      * stalled at the end. 2 is good especially when having more than one peer.
-     * @todo I dont think this should be an option, I think it should be hardcoded and can change
-     * during circumstances
-     * @var int(unsigned)
+     * @todo I don't think this should be an option, I think it should be hardcoded and can change during circumstances
+     * @var int (unsigned)
      */
     const MAX_NUMBER_OF_PIECE_BUFFERS = 1;
 
@@ -276,7 +267,7 @@ class Config
      * have to wait on the peer to return ALL segments. A timeout for ALL segments to return
      * can be set here.
      *
-     * @var int(unsigned)
+     * @var int (unsigned)
      */
     const PIECE_SEGMENT_TIMEOUT = 60;
 
