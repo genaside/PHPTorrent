@@ -1,6 +1,6 @@
 <?php
 
-class BenchmarkTest
+class BenchmarkTest extends \PHPUnit\Framework\TestCase
 {
     /*
         From the beginning torrent is added to the time it finishes, time
