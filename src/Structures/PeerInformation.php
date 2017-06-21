@@ -93,7 +93,7 @@ class PeerInformation
     /**
      * The Pieces the Peer have and don't have in the form of bits.
      * 1 = have, 0 = don't have.
-     * @var array(Binary)
+     * @var array (Binary)
      */
     public $bitfield = null;
 
