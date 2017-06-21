@@ -18,13 +18,12 @@ class FileInformation
 
     /**
      * The size of the file in bytes.
-     * @var Interger
+     * @var int
      */
     public $size;
 
     /**
-     *
-     * @var Interger
+     * @var int
      */
     public $completed;
 

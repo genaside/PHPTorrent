@@ -5,7 +5,7 @@ namespace genaside\PHPTorrent\Structures;
 /**
  * File Infomation List
  */
-class FileInformationList implements IteratorAggregate, ArrayAccess, Countable, JsonSerializable
+class FileInformationList implements \IteratorAggregate, \ArrayAccess, \Countable, \JsonSerializable
 {
 
     private $container = array();
@@ -24,7 +24,7 @@ class FileInformationList implements IteratorAggregate, ArrayAccess, Countable, 
 
     public function getIterator()
     {
-        return new ArrayIterator($this->container);
+        return new \ArrayIterator($this->container);
     }
 
     public function offsetSet($offset, $value)
@@ -59,7 +59,6 @@ class FileInformationList implements IteratorAggregate, ArrayAccess, Countable, 
 
     // My functions
 
-
     public function add(FileInformation $value)
     {
         $this->container[$this->count++] = $value;
@@ -74,6 +73,4 @@ class FileInformationList implements IteratorAggregate, ArrayAccess, Countable, 
         }
         return $total_size;
     }
-
-
 }

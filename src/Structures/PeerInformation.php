@@ -24,13 +24,13 @@ class PeerInformation
 
     /**
      * Peer's Network Port.
-     * @var Interger
+     * @var int
      */
     public $port;
 
     /**
      * Time out when connection
-     * @var Interger
+     * @var int
      */
     public $conection_timeout;
 
@@ -47,7 +47,7 @@ class PeerInformation
     public $is_partially_connected = false;
 
     /**
-     * Connected state where socket and handshake were successfull
+     * Connected state where socket and handshake were successful
      * @var bool
      */
     public $is_connected = false;
@@ -101,13 +101,13 @@ class PeerInformation
 
     /**
      * Bytes Downloaded from Peer.
-     * @var Interger
+     * @var int
      */
     public $downloaded;
 
     /**
      * Bytes Uploaded to Peer.
-     * @var Interger
+     * @var int
      */
     public $uploaded;
 
@@ -115,36 +115,36 @@ class PeerInformation
 
     /**
      * The speed in which we are uploading to the peer.
-     * @var Interger
+     * @var int
      */
     public $download_speed;
 
     /**
      * The speed in which we are downloading from the peer.
-     * @var Interger
+     * @var int
      */
     public $upload_speed;
 
     /**
      * A temporary var to accumlation of lengths for the next second in in timestamp
-     * @var Interger
+     * @var int
      */
     public $downloaded_temp;
     /**
      * A temporary var to accumlation of lengths for the next second in in timestamp
-     * @var Interger
+     * @var int
      */
     public $uploaded_temp;
 
     /**
      * Last time data was downloaded. Helps with getting to next second.
-     * @var Interger
+     * @var int
      */
     public $last_download_time = 0;
 
     /**
      * Last time data was uploaded. Helps with getting to next second.
-     * @var Interger
+     * @var int
      */
     public $last_upload_time = 0;
 
@@ -188,19 +188,19 @@ class PeerInformation
     /**
      * Time of sent interedted message
      * @deprecated
-     * @var Interger
+     * @var int
      */
     public $last_interested_time = 0;
 
     /**
      * Time of last keep alive message
-     * @var Interger
+     * @var int
      */
     public $last_keep_alive_time = 0;
 
     /**
      * A counter of how many bad payloads the peer gave
-     * @var Interger(unsigned)
+     * @var int (unsigned)
      */
     public $number_of_bad_data = 0;
 
@@ -212,10 +212,4 @@ class PeerInformation
     public $number_of_requests = 0;
     public $current_piece_index;
     public $piece_buffer;
-
-
 }
-
-
-
-// END

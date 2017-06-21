@@ -2,6 +2,8 @@
 
 namespace genaside\PHPTorrent\Structures;
 
+use chdemko\BitArray\BitArray;
+
 /**
  * Torrent Infomation Structure
  */
@@ -31,7 +33,7 @@ class TorrentInformation
 
     /**
      * Length of each piece.
-     * @var Interger
+     * @var int
      */
     public $piece_length;
 
@@ -75,7 +77,7 @@ class TorrentInformation
 
     /**
      *
-     * @var FileInfomationList
+     * @var FileInformationList
      */
     public $files;
 
@@ -98,16 +100,4 @@ class TorrentInformation
     public $last_uploaded_time;
     public $last_downloadedtime;
 
-
 }
-
-
-
-
-
-
-
-
-
-
-

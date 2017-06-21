@@ -5,7 +5,7 @@ namespace genaside\PHPTorrent\Structures;
 /**
  * File Infomation List
  */
-class AnnounceInformationList implements IteratorAggregate, ArrayAccess, Countable, JsonSerializable
+class AnnounceInformationList implements \IteratorAggregate, \ArrayAccess, \Countable, \JsonSerializable
 {
 
     private $container = array();
@@ -24,7 +24,7 @@ class AnnounceInformationList implements IteratorAggregate, ArrayAccess, Countab
 
     public function getIterator()
     {
-        return new ArrayIterator($this->container);
+        return new \ArrayIterator($this->container);
     }
 
     public function offsetSet($offset, $value)
@@ -64,6 +64,4 @@ class AnnounceInformationList implements IteratorAggregate, ArrayAccess, Countab
     {
         $this->container[$this->count++] = $value;
     }
-
-
 }

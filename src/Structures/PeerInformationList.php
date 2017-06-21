@@ -5,7 +5,7 @@ namespace genaside\PHPTorrent\Structures;
 /**
  * File Infomation List
  */
-class PeerInformationList implements IteratorAggregate, ArrayAccess, Countable, JsonSerializable
+class PeerInformationList implements \IteratorAggregate, \ArrayAccess, \Countable, \JsonSerializable
 {
 
     private $container = array();
@@ -24,7 +24,7 @@ class PeerInformationList implements IteratorAggregate, ArrayAccess, Countable, 
 
     public function getIterator()
     {
-        return new ArrayIterator($this->container);
+        return new \ArrayIterator($this->container);
     }
 
     public function offsetSet($offset, $value)
@@ -98,10 +98,4 @@ class PeerInformationList implements IteratorAggregate, ArrayAccess, Countable, 
     {
         return $this->container;
     }
-
-
 }
-
-
-
-

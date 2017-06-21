@@ -17,25 +17,25 @@ class AnnounceInformation
 
     /**
      * Tracker Interval.
-     * @var Interger
+     * @var int
      */
     public $interval = 0;
 
     /**
      * Minimum Tracker Interval.
-     * @var Interger
+     * @var int
      */
     public $min_interval;
 
     /**
      * Time of announcement
-     * @var Timestamp
+     * @var int TIMESTAMP
      */
     public $last_access_time = 0;
 
     /**
      * The status of the connectivity of the tracker
-     * @var Interger
+     * @var int
      */
     public $network_status;
 
@@ -48,12 +48,12 @@ class AnnounceInformation
     public $resource;
 
     /**
-     * @var Interger
+     * @var int
      */
     public $address;
 
     /**
-     * @var Interger
+     * @var int
      */
     public $conection_timeout;
 
@@ -73,18 +73,18 @@ class AnnounceInformation
     public $connection_failed = false;
 
     /**
-     * @var Interger
+     * @var int
      */
     public $read_write_timeout;
 
     /**
-     * @var Interger
+     * @var int
      * @deprecated
      */
     public $number_of_failed_connections = 0;
 
     /**
-     * @var Interger
+     * @var int
      * @deprecated
      */
     public $bad_response = false;
@@ -92,19 +92,18 @@ class AnnounceInformation
     /* ----- UDP ----- */
 
     /**
-     * @var Interger
+     * @var int
      */
     public $partial_connect = false;
 
     /**
-     * @var Interger
+     * @var int
      */
     public $udp_connect_id;
 
     /**
-     * @var Interger
+     * @var int
      */
     public $udp_transaction_id;
-
 
 }
