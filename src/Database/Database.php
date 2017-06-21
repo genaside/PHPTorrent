@@ -3,13 +3,16 @@
 namespace genaside\PHPTorrent\Database;
 
 use genaside\PHPTorrent\Config\Config;
+use genaside\PHPTorrent\Structures\AnnounceInformation;
+use genaside\PHPTorrent\Structures\AnnounceInformationList;
+use genaside\PHPTorrent\Structures\FileInformation;
+use genaside\PHPTorrent\Structures\FileInformationList;
 use genaside\PHPTorrent\Structures\TorrentInformation;
 use genaside\PHPTorrent\Structures\TorrentInformationList;
 
 /**
- * A class to handle all database work
- * for PHPTorrent.
- * Uses SQLite.
+ * Class Database
+ * @package genaside\PHPTorrent\Database
  */
 class Database
 {
@@ -22,7 +25,7 @@ class Database
     public $db_connection;
 
     /**
-     * Deconstructor
+     * Destructor
      */
     public function __destruct()
     {
@@ -63,8 +66,7 @@ class Database
 
     /**
      * Build database.
-     * If haven't already done so, the database will be rebuilt
-     * using a file as template which is in the same folder as database.php
+     * If haven't already done so, the database will be rebuilt using a file as template which is in the resources/ directory
      *
      * @throws \Exception
      */
@@ -98,7 +100,7 @@ class Database
     }
 
     /**
-     * Get all torrents, active or not. EVERTHING.
+     * Get all torrents, active or not. EVERYTHING.
      *
      * @returns TorrentInformationList.
      */
@@ -112,13 +114,11 @@ class Database
      * Get all active torrents, but to a limit.
      *
      * @throws \Exception
-     * @param $limit
+     * @param int $limit
      * @returns TorrentInformationList A list of torrents will be returned
      */
     public function getActiveTorrents($limit)
     {
-        $torrent_list = array();
-
         $stmt = $this->db_connection->prepare("
         SELECT 
             *
@@ -138,13 +138,13 @@ class Database
      * Basically this function continues to build
      * the TorrentInformation object using the database.
      *
-     * @param $results
+     * @param \SQLite3Result $results
      * @return TorrentInformationList
      */
     private function buildTorrentInfoHelper($results)
     {
-
         $torrent_info_list = new TorrentInformationList;
+
         while ($row = $results->fetchArray(SQLITE3_ASSOC)) {
             $torrent_info = new TorrentInformation;
             $torrent_info->info_hash = $row['info_hash'];
@@ -152,15 +152,16 @@ class Database
             $torrent_info->pieces = $row['pieces'];
             $torrent_info->piece_length = $row['piece_length'];
             $torrent_info->private = $row['is_private'];
-            // storage
+
+            // Storage
             $torrent_info->destination = $row['destination'];
+
             // Statistics
             $torrent_info->bytes_left = $row['bytes_left'];
             $torrent_info->bytes_uploaded = $row['bytes_uploaded'];
             $torrent_info->bytes_downloaded = $row['bytes_downloaded'];
             $torrent_info_list->add($torrent_info);
         }
-
 
         foreach ($torrent_info_list as &$torrent_info) {
             // Announce
@@ -226,7 +227,7 @@ class Database
             $total_length += $file_info->size;
         }
 
-        // Add main torrent infomation into database
+        // Add main torrent information into database
         $count = 0;
         $stmt = $this->db_connection->prepare('INSERT INTO Torrents( info_hash, name, piece_length, pieces, destination, bytes_left, active ) VALUES( ?, ?, ?, ?, ?, ?, ? );');
         $stmt->bindParam(++$count, $torrent_info->info_hash, SQLITE3_TEXT);
@@ -296,9 +297,4 @@ class Database
         $stmt->bindParam(2, $torrent_info->info_hash, SQLITE3_TEXT);
         $results = $stmt->execute();
     }
-
-
 }
-
-
-// END
