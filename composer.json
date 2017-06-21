@@ -7,5 +7,9 @@
     "psr-4": {
       "genaside\\PHPTorrent\\": "src/"
     }
+  },
+  "require": {
+    "rych/bencode": "^1.0",
+    "chdemko/bitarray": "^1.1"
   }
 }
