@@ -1,0 +1,11 @@
+{
+  "name": "genaside/phptorrent",
+  "description": "A Torrent client written in php.",
+  "minimum-stability": "stable",
+  "license": "Zlib",
+  "autoload": {
+    "psr-4": {
+      "genaside\\PHPTorrent\\": "src/"
+    }
+  }
+}
