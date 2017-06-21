@@ -70,7 +70,7 @@ class Database
      */
     public function buildDatabase()
     {
-        $sql = file_get_contents(dirname(__file__) . DIRECTORY_SEPARATOR . "tables.sql");
+        $sql = file_get_contents(__DIR__ . '/../../resources/tables.sql');
         if (!$this->db_connection->exec($sql)) {
             throw new \Exception($this->db_connection->lastErrorMsg());
         }
@@ -299,18 +299,6 @@ class Database
 
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 // END
