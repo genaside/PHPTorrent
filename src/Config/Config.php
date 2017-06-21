@@ -92,7 +92,7 @@ class Config
      *
      * @var string
      */
-    const CLIENT_DATABASE_LOCATION = "/home/god/phptorrentdata.sqlite";
+    const CLIENT_DATABASE_LOCATION = __DIR__ . "/../../resources/db.sqlite";
 
     /**
      * The interval to update all statistics to the
@@ -116,7 +116,7 @@ class Config
      * as well.
      * @var string
      */
-    const LOGFILE_LOCATION = "/home/god/phptorrentlog.txt";
+    const LOGFILE_LOCATION = __DIR__ . "/../../resources/info.log";
 
     /**
      * Enable logs to be sent to stdout(terminal) as well
