@@ -2,9 +2,12 @@
 
 namespace genaside\PHPTorrent\Interfacing;
 
+/**
+ * Class PHPTorrentInterface
+ * @package genaside\PHPTorrent\Interfacing
+ */
 class PHPTorrentInterface
 {
-
     const SUCCESS = 1;
     const FAILURE = 0;
 
@@ -13,17 +16,15 @@ class PHPTorrentInterface
      */
     public $socket;
 
-
     /**
      * Constructor
-     * does nothing now
      */
     public function __construct()
     {
     }
 
     /**
-     * Deconstructor
+     * Destructor
      */
     public function __destruct()
     {
@@ -56,8 +57,8 @@ class PHPTorrentInterface
         }
 
         if ($username != '') {
-            $userpass = "$username:$password";
-            socket_write($socket, $userpass, strlen($userpass));
+            $userPass = "$username:$password";
+            socket_write($socket, $userPass, strlen($userPass));
         }
 
         if (($status = socket_read($socket, 1)) === false) {//
@@ -74,7 +75,7 @@ class PHPTorrentInterface
     }
 
     /**
-     * Disconnect from daemon.
+     * Disconnect from the daemon.
      */
     public function disconnect()
     {
@@ -83,9 +84,8 @@ class PHPTorrentInterface
 
 
     /**
-     * Shutdown daemon.
+     * Shutdown the daemon.
      * Tell daemon to shutdown
-     *
      */
     public function shutdownDaemon()
     {
@@ -108,6 +108,7 @@ class PHPTorrentInterface
         $message .= pack('C', $form->active);
 
         socket_write($this->socket, $message, strlen($message));
+
         // Wait for status
         $status = socket_read($this->socket, 1);
         if (current(unpack('C', $status)) == self::SUCCESS) {
@@ -183,8 +184,6 @@ class PHPTorrentInterface
         return false;
     }
 
-    /* --- */
-
     /**
      * Display all running torrents.
      * Tell the daemon to send a json of all the torrents
@@ -197,9 +196,9 @@ class PHPTorrentInterface
         $message = pack('C', 75);
         socket_write($this->socket, $message, strlen($message));
 
-        $reponse = socket_read($this->socket, 4096);
+        $response = socket_read($this->socket, 4096);
 
-        $obj = json_decode($reponse);
+        $obj = json_decode($response);
         return $obj;
     }
 
@@ -215,9 +214,9 @@ class PHPTorrentInterface
         $message = pack('C', 76);
         socket_write($this->socket, $message, strlen($message));
 
-        $reponse = socket_read($this->socket, 8192);
+        $response = socket_read($this->socket, 8192);
 
-        $obj = json_decode($reponse);
+        $obj = json_decode($response);
         return $obj;
     }
 
