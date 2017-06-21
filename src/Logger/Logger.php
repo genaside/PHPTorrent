@@ -5,7 +5,8 @@ namespace genaside\PHPTorrent\Logger;
 use genaside\PHPTorrent\Config\Config;
 
 /**
- * Genaeric Logger
+ * Class Logger
+ * @package genaside\PHPTorrent\Logger
  */
 class Logger
 {
@@ -16,50 +17,39 @@ class Logger
     const DEBUG = 4;
 
     /**
-     * @var
+     * @param string $programName
+     * @param int $type
+     * @param string $message
      */
-    //private $program_name;
-
-    /**
-     * Constructor
-     * @param $program_name
-     */
-    //public function __construct( $program_name = 'LibTorrentPHP' ){       
-    //    $this->program_name = $program_name;
-
-    //}
-
-    /**
-     *
-     */
-    public static function logMessage($program_name, $type, $message)
+    public static function logMessage($programName, $type, $message)
     {
-        $datatime = date('Y-m-d H:i:s');
-        if ($type == self::STATUS) {
-            $type_str = 'Status';
-        } else {
-            if ($type == self::CRITICAL) {
+        $dateTime = date('Y-m-d H:i:s');
+
+        switch ($type) {
+            case self::STATUS:
+                $type_str = 'Status';
+                break;
+            case self::CRITICAL:
                 $type_str = 'Critical';
-            } else {
-                if ($type == self::WARNING) {
-                    $type_str = 'Warning';
-                } else {
-                    if ($type == self::DEBUG) {
-                        $type_str = 'Debug';
-                    }
-                }
-            }
+                break;
+            case self::WARNING:
+                $type_str = 'Warning';
+                break;
+            case self::DEBUG:
+            default:
+                $type_str = 'Debug';
+                break;
         }
 
 
-        $message_log = "[$datatime][$program_name][$type_str]: $message\n";
+        $message_log = "[$dateTime][$programName][$type_str]: $message\n";
 
         $report = function () use (&$message_log) {
             if (Config::ENABLE_LOGGING_ON_STDOUT) {
                 // Output message to console
                 echo $message_log;
             }
-            //
+            // Log the message
             error_log($message_log, 3, Config::LOGFILE_LOCATION);
         };
 
