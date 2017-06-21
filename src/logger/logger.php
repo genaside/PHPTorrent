@@ -2,6 +2,8 @@
 
 namespace genaside\PHPTorrent\Logger;
 
+use genaside\PHPTorrent\Config\Config;
+
 /**
  * Genaeric Logger
  */
@@ -88,9 +90,5 @@ class Logger
                 }
             }
         }
-
-
     }
-
-
 }
