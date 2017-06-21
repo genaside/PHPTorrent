@@ -1,6 +1,6 @@
 <?php
 
-
+namespace genaside\PHPTorrent\Storage;
 
 /**
  * Handles download files for the bittorent client.

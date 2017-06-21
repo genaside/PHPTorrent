@@ -1,11 +1,6 @@
 <?php
-/**
- * Contains a pair of recursive functions that implement the bencode data
- * encoding format.
- *
- * @author  Michael J. I. Jackson <mjijackson@gmail.com>
- */
 
+namespace genaside\PHPTorrent\Bencode;
 
 class Bencode
 {

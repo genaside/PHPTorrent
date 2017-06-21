@@ -1,10 +1,13 @@
 <?php
 
+namespace genaside\PHPTorrent\Structures;
+
 /**
  * File Infomation Structure
  */
-class FileInformation{
-    
+class FileInformation
+{
+
     /**
      * The full filename relative to torrent's info name.
      * @note a null or empty name means that this is the only file
@@ -12,24 +15,24 @@ class FileInformation{
      * @var String
      */
     public $name;
-    
+
     /**
      * The size of the file in bytes.
      * @var Interger
      */
     public $size;
-    
+
     /**
-     * 
+     *
      * @var Interger
      */
-    public $completed;   
+    public $completed;
 
     /* ----- ? ----- */
-    
+
     /**
      * Whether this file should be downloaded or skipped
      * @var Bool
      */
-    public $active; 
+    public $active;
 }

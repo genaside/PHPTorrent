@@ -1,5 +1,6 @@
 <?php
 
+namespace genaside\PHPTorrent\Torrent;
 
 /**
  * A class to handle torrent files

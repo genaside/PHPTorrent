@@ -1,5 +1,7 @@
 <?php
 
+namespace genaside\PHPTorrent\Structures;
+
 /**
  * Torrent Infomation List
  */

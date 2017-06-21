@@ -1,5 +1,7 @@
 <?php
 
+namespace genaside\PHPTorrent\Database;
+
 /**
  * A class to handle all database work
  * for PHPTorrent.
