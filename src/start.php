@@ -24,7 +24,7 @@ require_once(__DIR__ . "/structures/FileInformationList.php");
 require_once(__DIR__ . "/structures/AnnounceInformationList.php");
 require_once(__DIR__ . "/structures/PeerInformationList.php");
 
-require_once(__DIR__ . "/logger/logger.php");
+require_once(__DIR__ . "/Logger/Logger.php");
 
 // Third party software
 require_once(__DIR__ . "/../../includes/SpectrumLib/BitArray.php");

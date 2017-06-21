@@ -2,6 +2,8 @@
 
 namespace genaside\PHPTorrent\Torrent;
 
+use genaside\PHPTorrent\Structures\TorrentInformation;
+
 /**
  * A class to handle torrent files
  */
@@ -12,7 +14,7 @@ class Torrent{
      * @note It turns out Magnet links are not really good. might need think about it TODO
      *
      * @todo Magnet link parser will take some time to create, so magnet links will not work
-     * @param $torrent_location The loccation of the torrent or magnet
+     * @param string $torrent_location The loccation of the torrent or magnet
      * @return TorrentInformation, or false on failure
      */
     public static function getTorrentInfoFromSource( $torrent_location ){

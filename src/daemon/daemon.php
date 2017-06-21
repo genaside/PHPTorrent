@@ -2,6 +2,20 @@
 
 namespace genaside\PHPTorrent\Daemon;
 
+use chdemko\BitArray\BitArray;
+use genaside\PHPTorrent;
+use genaside\PHPTorrent\Config\Config;
+use genaside\PHPTorrent\Database\Database;
+use genaside\PHPTorrent\Logger\Logger;
+use genaside\PHPTorrent\Storage\Storage;
+use genaside\PHPTorrent\Structures\AnnounceInformation;
+use genaside\PHPTorrent\Structures\PeerInformation;
+use genaside\PHPTorrent\Structures\PeerInformationList;
+use genaside\PHPTorrent\Structures\TorrentInformation;
+use genaside\PHPTorrent\Structures\TorrentInformationList;
+use genaside\PHPTorrent\Torrent\Torrent;
+use Rych\Bencode\Bencode;
+
 /**
  * The main program that will be running in the background
  * TODO Remove all magic numbers
@@ -113,7 +127,7 @@ class Daemon
     public function start()
     {
         // initialize various components 
-        logger::logMessage(self::PROGRAM_NAME, Logger::STATUS, "Started PHPTorrent, the bittorrent client.");
+        Logger::logMessage(self::PROGRAM_NAME, Logger::STATUS, "Started PHPTorrent, the bittorrent client.");
 
         $this->initializeID();
         $this->initializePort();
@@ -142,7 +156,7 @@ class Daemon
         }
         $this->peer_id = self::CLIENT_ID . $randomString;
 
-        logger::logMessage(self::PROGRAM_NAME, Logger::STATUS, "Peer ID: {$this->peer_id}");
+        Logger::logMessage(self::PROGRAM_NAME, Logger::STATUS, "Peer ID: {$this->peer_id}");
     }
 
 
@@ -182,21 +196,21 @@ class Daemon
                 for ($i = $range[0]; $i <= $range[1]; ++$i) {
                     if ($socket = $create_server_socket($i)) {
                         $this->port = $socket;
-                        logger::logMessage(self::PROGRAM_NAME, Logger::STATUS, "Created and binded port $i");
+                        Logger::logMessage(self::PROGRAM_NAME, Logger::STATUS, "Created and binded port $i");
                         return;
                     }
                 }
             } else {
                 if ($socket = $create_server_socket($value)) {
                     $this->port = $socket;
-                    logger::logMessage(self::PROGRAM_NAME, Logger::STATUS, "Created and binded port $value");
+                    Logger::logMessage(self::PROGRAM_NAME, Logger::STATUS, "Created and binded port $value");
                     return;
                 }
             }
         }
 
         // At this point no sockets were created
-        logger::logMessage(self::PROGRAM_NAME, Logger::CRITICAL, "Creation and Binding of network port failed");
+        Logger::logMessage(self::PROGRAM_NAME, Logger::CRITICAL, "Creation and Binding of network port failed");
         exit();
     }
 
@@ -216,14 +230,14 @@ class Daemon
                     //socket_set_nonblock( $socket );
                     $this->interface_conn = $socket;
                     $port = Config::CLIENT_INTERFACE_PORT;
-                    logger::logMessage(self::PROGRAM_NAME, Logger::STATUS, "Created and binded interface port, $port.");
+                    Logger::logMessage(self::PROGRAM_NAME, Logger::STATUS, "Created and binded interface port, $port.");
                     return;
                 }
             }
         }
 
         // At this point no sockets were created
-        logger::logMessage(self::PROGRAM_NAME, Logger::WARNING, "Creation and Binding of iterface port failed");
+        Logger::logMessage(self::PROGRAM_NAME, Logger::WARNING, "Creation and Binding of iterface port failed");
         exit();
     }
 
@@ -239,7 +253,7 @@ class Daemon
         $this->database_handler->connect();
         $this->database_handler->buildDatabase();
 
-        logger::logMessage(self::PROGRAM_NAME, Logger::STATUS, "Database seems ok:" . Config::CLIENT_DATABASE_LOCATION);
+        Logger::logMessage(self::PROGRAM_NAME, Logger::STATUS, "Database seems ok:" . Config::CLIENT_DATABASE_LOCATION);
     }
 
     /**
@@ -265,7 +279,7 @@ class Daemon
             if ($torrent_info_list->isEmpty()) {
                 // There are no torrents to work on                
                 $msg = "There are no torrents for the client to work on.";
-                logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
                 // dont need to overwork the CPU for an empty list, sleeping for a little bit.
                 sleep(5);
                 continue;
@@ -275,10 +289,10 @@ class Daemon
             foreach ($torrent_info_list as &$torrent_info) {
                 if (is_null($torrent_info->bitfield)) {
                     // Hash check file(s) if havent already done so, and  set bitfield with it
-                    $torrent_info->bitfield = new BitArray(strlen($torrent_info->pieces) / 20);
+                    $torrent_info->bitfield = BitArray::fromInteger(strlen($torrent_info->pieces) / 20);
 
                     $msg = "Checking the hash of the file(s) for torrent, {$torrent_info->info_hash}...";
-                    logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                    Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
 
                     $torrent_info->bitfield->assignBinaryString(Storage::fullHashCheck($torrent_info));
                     // calculate bytes remaining
@@ -325,9 +339,9 @@ class Daemon
                                 $num_of_peers = count($tracker_response['peers']);
 
                                 $msg = "Tracker, {$announce_info->url}, returned $num_of_peers peers.";
-                                logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                                Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
                                 $msg = "Next announce interval near at {$tracker_response['interval']}.";
-                                logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                                Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
                             }
                         }
                     } else {
@@ -356,16 +370,16 @@ class Daemon
                                     $num_of_peers = count($tracker_response['peers']);
 
                                     $msg = "Tracker, {$announce_info->url}, returned $num_of_peers peers.";
-                                    logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                                    Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
                                     $msg = "Next announce interval near at {$tracker_response['interval']}.";
-                                    logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                                    Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
                                 }
                             }
 
                         } else {
                             // This tracker is not supported
                             $msg = "{$announce_info->url} is not a supported announce url.";
-                            logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                            Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
                             // get rid of it, don't want to deal with it
                             unset($torrent_info->announce_infos[$key]);
                             continue;
@@ -431,7 +445,7 @@ class Daemon
                 if ($torrent_info->bitfield == $peer_info->bitfield) {
                     // neither of us can gain from each other because we have the pieces
                     $msg = "Torrent, {$torrent_info->info_hash}, has the same exact bitfield as the peer.";
-                    logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                    Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
 
                     unset($peer_info_list[$key]);
                     continue;
@@ -517,7 +531,7 @@ class Daemon
                 $last_stat_update_time = $ctime;
 
                 $msg = "Updated Database.";
-                logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
             }
 
 
@@ -535,7 +549,7 @@ class Daemon
 
     /**
      * Handle Peer connections to us.
-     * @param TorrentInformation
+     * @param PeerInformationList $peer_info_list
      */
     private function handleIncomingPeerConnection(PeerInformationList $peer_info_list)
     {
@@ -603,7 +617,10 @@ class Daemon
      * Handles the making od connections to peers.
      *
      * @note all peers that connect to us, uses a different funtion.
-     * @param TorrentInformation We just need the bitfield to show the peer
+     * @param PeerInformationList $peer_info_list
+     * @param PeerInformation $peer_info
+     * @param TorrentInformation $torrent_info We just need the bitfield to show the peer
+     * @return bool
      */
     private function handleNewPeerConnection(PeerInformationList $peer_info_list, PeerInformation &$peer_info, TorrentInformation $torrent_info)
     {
@@ -618,6 +635,7 @@ class Daemon
                         return $element;
                     }
                 }
+                return null;
             });
 
             if (count($farr) >= Config::MAX_PEERS_PER_TORRENT) {
@@ -636,7 +654,7 @@ class Daemon
             while (!($result = @socket_connect($peer_info->resource, $peer_info->address, $peer_info->port))) {
                 if ((time() - $peer_info->conection_timeout) >= Config::PEER_CONNECTION_TIMEOUT) {
                     $msg = "Connection to peer {$peer_info->address}:{$peer_info->port} timed out on socket.";
-                    logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                    Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
 
                     $peer_info = null;
                     return false;
@@ -661,7 +679,7 @@ class Daemon
                         $handshake = $this->recieveHandShake($peer_info->resource);
                         if (!$handshake) {
                             $msg = "Connection to peer {$peer_info->address}:{$peer_info->port} timed out on handshake.";
-                            logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                            Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
 
                             $peer_info = null;
                             return false;
@@ -686,7 +704,7 @@ class Daemon
                 // Everthing is ok   
                 $client_id = substr($peer_info->peer_id, 0, 8);
                 $msg = "Peer {$client_id}:{$peer_info->address}:{$peer_info->port} connected successfully.";
-                logger::logMessage(self::PROGRAM_NAME, Logger::STATUS, $msg);
+                Logger::logMessage(self::PROGRAM_NAME, Logger::STATUS, $msg);
 
                 $peer_info->is_connected = true;
                 $peer_info->is_connecting = false;
@@ -717,7 +735,7 @@ class Daemon
             if (socket_recv($peer_info->resource, $data, 4096, MSG_DONTWAIT) === false) {
                 // error on socket                
                 socket_close($peer_info->resource);
-                return;
+                return null;
             } else {
                 $peer_info->buffer .= $data;
             }
@@ -731,19 +749,19 @@ class Daemon
             //echo $message_id . ",";
             if (strlen($peer_info->buffer) < $full_message_len) {
                 // we don't have the WHOLE message inorder to contine                
-                return;
+                return null;
             } else {
                 // now we have the entire message we can proceed                
                 $message_len = current(unpack('N', $this->bufferRead($peer_info, 4)));
                 if ($message_len == 0) {
                     //echo "keep alive\n";
-                    return;
+                    return null;
                 }
                 $message_id = current(unpack('C', $this->bufferRead($peer_info, 1))); // TODO iam getting an error where 0 bytes are read
             }
         } else {
             // cant calulate message length yet, need atleast 4 bytes
-            return;
+            return null;
         }
 
         //echo "{$peer_info->address}[ $message_len | $message_id ] " . "\n";  
@@ -784,13 +802,13 @@ class Daemon
                 break;
             case 5:
                 // bitfield,                
-                $peer_info->bitfield = new BitArray(count($torrent_info->bitfield));
+                $peer_info->bitfield = BitArray::fromInteger(count($torrent_info->bitfield));
                 try {
                     $peer_info->bitfield->assignBinaryString($this->bufferRead($peer_info, $message_len - 1));
-                } catch (Exception $e) {
+                } catch (\Exception $e) {
                     // Peer has a fualty bitfield, disconnect peer.
                     $peer_info = null;
-                    return;
+                    return null;
                 }
                 break;
             case 6:
@@ -799,7 +817,7 @@ class Daemon
                     // Peer is in choke and is still making requests, what nerve.
                     echo "Peer {$peer_info->address}:{$peer_info->port} is making request while in choke,\n";
                     $peer_info = null;
-                    return;
+                    return null;
                 }
 
                 $index = current(unpack('N', $this->bufferRead($peer_info, 4)));
@@ -814,7 +832,7 @@ class Daemon
                 $torrent_info->bytes_uploaded += strlen($block);
 
                 $msg = "Gave a piece(index:$index, begin:$begin) to peer, {$peer_info->address}:{$peer_info->port}, for torrent {$peer_info->info_hash}";
-                logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
                 break;
             case 7:
                 // payload                            
@@ -851,7 +869,7 @@ class Daemon
                     }
                 } else {
                     $msg = "peer, {$peer_info->address}:{$peer_info->port}, gave good piece at index $index for torrent {$peer_info->info_hash}";
-                    logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                    Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
                 }
 
                 // Write piece to file
@@ -863,7 +881,7 @@ class Daemon
 
                 if ($torrent_info->bytes_left == 0) {
                     $msg = "Torrent {$torrent_info->info_hash} has finished completely";
-                    logger::logMessage(self::PROGRAM_NAME, Logger::STATUS, $msg);
+                    Logger::logMessage(self::PROGRAM_NAME, Logger::STATUS, $msg);
 
                     if (Config::TORRENT_COMPETION_NOTIFICATION_SCRIPT != "") {
                         // run special script
@@ -896,7 +914,8 @@ class Daemon
     }
 
     /**
-     *
+     * @param TorrentInformation $torrent_info
+     * @param PeerInformation $peer_info
      */
     private function makeRequests(TorrentInformation $torrent_info, PeerInformation &$peer_info)
     {
@@ -1052,7 +1071,8 @@ class Daemon
      * Some number codes require a secondary option( or third), that will be found
      * by continueing to read the socket
      *
-     * @throws
+     * @param TorrentInformationList $torrent_info_list
+     * @param PeerInformationList $peer_info_list
      */
     private function processCommands(TorrentInformationList &$torrent_info_list, PeerInformationList &$peer_info_list)
     {
@@ -1066,7 +1086,7 @@ class Daemon
             if (count($this->interface_clients) >= Config::MAX_INTERFACE_CONNECTIONS) {
                 // To many connections.
                 $msg = "User can't access daemon controls, too many entities are already controlling it.";
-                logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
                 return;
             }
 
@@ -1078,7 +1098,7 @@ class Daemon
                 array_push($this->interface_clients, $client);
 
                 $msg = "User $addr:$port has successfully connected and stored to the Daemon's interface.";
-                logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
             } else {
                 // TODO http://blog.leenix.co.uk/2011/05/howto-php-tcp-serverclient-with-ssl.html
                 // Before storing socket, authentication of client must Succeed                
@@ -1099,11 +1119,11 @@ class Daemon
                     array_push($this->interface_clients, $client);
 
                     $msg = "Client $addr:$port has successfully connected to the Daemon's interface.";
-                    logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                    Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
                 } else {
                     // failed
                     $msg = "Authenticate failed.";
-                    logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                    Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
                     socket_write($client, pack('C', self::FAILURE), 1);
                     return;
                 }
@@ -1158,14 +1178,14 @@ class Daemon
                     $torrent_info = Torrent::getTorrentInfoFromSource($torrent_path);
                     if (!$torrent_info) {
                         $opt_err = "Operation error: failed to read torrent $torrent_path.";
-                        logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $opt_err);
+                        Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $opt_err);
                         socket_write($client, pack('C', self::FAILURE), 1);
                         return;
                     }
 
                     if ($this->database_handler->getTorrent($torrent_info->info_hash)) {
                         $msg = "Operation error: torrent, {$torrent_info->info_hash}, already exist.";
-                        logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                        Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
                         socket_write($client, pack('C', self::FAILURE), 1);
                         return;
                     }
@@ -1174,7 +1194,7 @@ class Daemon
                     $success = Storage::createStorage($torrent_info->files, $destination_path);
                     if (!$success) {
                         $opt_err = "Operation error: failed to create file(s) for torrent.";
-                        logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $opt_err);
+                        Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $opt_err);
                         socket_write($client, pack('C', self::FAILURE), 1);
                         return;
                     }
@@ -1182,7 +1202,7 @@ class Daemon
                     if ($active != 0 && $active != 1) {
                         // not a valid number, set to zero
                         $opt_err = "Operation warning: the 'active' option needs to be set to 0(false) or 1(true), got $active. Using 0";
-                        logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $opt_err);
+                        Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $opt_err);
                         $active = 0;
                     }
                     $torrent_info->active = $active;
@@ -1191,12 +1211,12 @@ class Daemon
                     // Add torrent_info to database  
                     $this->database_handler->addTorrentToDatabase($torrent_info);
                     $msg = "Torrent, {$torrent_info->info_hash}, has been added to the database..";
-                    logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                    Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
 
                     if (count($torrent_info_list) < Config::MAX_ACTIVE_RUNNING_TORRENTS && $active == 1) {
                         // Since were in the limit lets start running the torrent
                         $msg = "Torrent, {$torrent_info->info_hash}, will be started now.";
-                        logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                        Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
                         $torrent_info_list->add($torrent_info);
                     }
 
@@ -1209,7 +1229,7 @@ class Daemon
                     // Find the torrent
                     if (!($torrent_info = $this->database_handler->getTorrent($torrent_info_hash))) {
                         $msg = "Operation error: couldn't delete torrent, {$torrent_info->info_hash}, cuase it does not exist.";
-                        logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                        Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
                         socket_write($client, pack('C', self::FAILURE), 1);
                         return;
                     }
@@ -1227,13 +1247,13 @@ class Daemon
                     // Remove torrent from the database
                     $this->database_handler->removeTorrentFromDatabase($torrent_info);
                     $msg = "Removed torrent, {$torrent_info->info_hash}, from database.";
-                    logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                    Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
 
                     // Finally Roemove files if $delete_files is set to 1/true   
                     if ($delete_files == true) {
                         Storage::deleteStorage($torrent_info);
                         $msg = "Deleted any files belonging to torrent, {$torrent_info->info_hash}.";
-                        logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                        Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
                     }
 
                     // Gotta to add a free active torrent to the torrent list TODO
@@ -1241,7 +1261,7 @@ class Daemon
                     $torrent_info_list->addList($this->database_handler->getActiveTorrents(Config::MAX_ACTIVE_RUNNING_TORRENTS), $need);
 
                     $msg = "Torrent, {$torrent_info->info_hash},Successfully deleted.";
-                    logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                    Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
                     socket_write($client, pack('C', self::SUCCESS), 1);
                     break;
                 case Operation::ACTIVATE_TORRENT:
@@ -1249,7 +1269,7 @@ class Daemon
 
                     if (!($torrent_info = $this->database_handler->getTorrent($torrent_info_hash))) {
                         $opt_err = "Operation error: Couldn't activate torrent $torrent_info_hash. Torrent does not exist.\n";
-                        logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $opt_err);
+                        Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $opt_err);
                         socket_write($client, pack('C', self::FAILURE), 1);
                         return;
                     }
@@ -1262,7 +1282,7 @@ class Daemon
                     }
 
                     $msg = "Torrent ,{$torrent_info->info_hash}, has been activated.";
-                    logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                    Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
 
                     socket_write($client, pack('C', self::SUCCESS), 1);
                     break;
@@ -1271,7 +1291,7 @@ class Daemon
 
                     if (!($torrent_info = $this->database_handler->getTorrent($torrent_info_hash))) {
                         $opt_err = "Operation error: Couldn't deactivate torrent $torrent_info_hash. Torrent does not exist.\n";
-                        logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $opt_err);
+                        Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $opt_err);
                         socket_write($client, pack('C', self::FAILURE), 1);
                         return;
                     }
@@ -1291,7 +1311,7 @@ class Daemon
                     $torrent_info_list->addList($this->database_handler->getActiveTorrents(Config::MAX_ACTIVE_RUNNING_TORRENTS), $need);
 
                     $msg = "Torrent ,{$torrent_info->info_hash}, has been deactivated.";
-                    logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                    Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
 
                     socket_write($client, pack('C', self::SUCCESS), 1);
                     break;
@@ -1301,7 +1321,7 @@ class Daemon
 
                     $total = count($torrent_info_list);
                     $msg = "Sent out a list of running torrents that totals $total torrent(s).";
-                    logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                    Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
                     break;
                 case Operation::DISPLAY_ALL_TORRENTS:
                     $torrents = $this->database_handler->getAllTorrents();
@@ -1311,7 +1331,7 @@ class Daemon
 
                     $total = count($torrents);
                     $msg = "Sent out a list of torrents in database that totals $total torrent(s).";
-                    logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                    Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
                     break;
                 default:
                     // TODO disconnect on too many bad operations in a row
@@ -1346,8 +1366,8 @@ class Daemon
     /**
      * Gather information about completed pieces and total filesize
      * to determine how many bytes are left for the torrent.
-     * @param TorrentInformation
-     * @return The number of bytes left.
+     * @param TorrentInformation $torrent_info
+     * @return int The number of bytes left.
      */
     private function bytesLeft(TorrentInformation $torrent_info)
     {
@@ -1369,7 +1389,7 @@ class Daemon
 
         $percent = round(($total_filesize - $has_left) / $total_filesize, 2) * 100;
         $msg = "Torrent, {$torrent_info->info_hash}, has $has_left byte(s) left( $percent% completion ).";
-        logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+        Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
 
         return $has_left;
     }
@@ -1382,7 +1402,7 @@ class Daemon
      * The whole operation use states, to finally
      * determine connection.
      *
-     * @param &AnnounceInformation
+     * @param AnnounceInformation $announce_info
      * @return True if conneced, or false if not connected YET or timedout.
      */
     private function connectTracker_HTTP(AnnounceInformation &$announce_info)
@@ -1395,7 +1415,7 @@ class Daemon
             if (!filter_var($announce_info->address, FILTER_VALIDATE_IP)) {
                 // Can't get ip address, don't bother
                 $msg = "Can't get ip address from tracker {$announce_info->url}";
-                logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
 
                 $announce_info->connection_failed = true;
                 return false;
@@ -1420,7 +1440,7 @@ class Daemon
             while (!($result = @socket_connect($announce_info->resource, $announce_info->address, $port))) {
                 if ((time() - $announce_info->conection_timeout) >= 5) {
                     $msg = "Connection to tracker, {$announce_info->url}, timed out.";
-                    logger::logMessage(self::PROGRAM_NAME, Logger::STATUS, $msg);
+                    Logger::logMessage(self::PROGRAM_NAME, Logger::STATUS, $msg);
 
                     echo "\n";
                     $announce_info->is_connected = false;
@@ -1432,7 +1452,7 @@ class Daemon
 
             // We are connected
             $msg = "Tracker, {$announce_info->url}, successfully connected.";
-            logger::logMessage(self::PROGRAM_NAME, Logger::STATUS, $msg);
+            Logger::logMessage(self::PROGRAM_NAME, Logger::STATUS, $msg);
 
             socket_set_block($announce_info->resource);
             $announce_info->is_connected = true;
@@ -1447,9 +1467,9 @@ class Daemon
     /**
      * Send a request to the tracker location with our GET varibles.
      *
-     * @param &TorrentInformation
-     * @param &AnnounceInformation
-     *
+     * @param TorrentInformation $torrent_info
+     * @param AnnounceInformation $announce_info
+     * @param int $my_port
      */
     private function sendTrackerRequest_HTTP(TorrentInformation &$torrent_info, AnnounceInformation &$announce_info, $my_port)
     {
@@ -1490,8 +1510,8 @@ class Daemon
     /**
      * Check the for any repsponce from the tacker
      *
-     * @param &AnnounceInformation
-     * @return dictionary(array) format responce.
+     * @param AnnounceInformation $announce_info
+     * @return array|bool dictionary(array) format responce.
      */
     private function recieveTrackerResponse_HTTP(AnnounceInformation &$announce_info)
     {
@@ -1507,9 +1527,9 @@ class Daemon
                 // parse response message
                 try {
                     $tracker_response = Bencode::decode($raw_response);
-                } catch (Exception $e) {
+                } catch (\Exception $e) {
                     $msg = "Error getting response from {$announce_info->url} $raw_response $raw_http.";
-                    logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                    Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
 
                     $announce_info->bad_response = true;
 
@@ -1549,8 +1569,9 @@ class Daemon
      * {http://xbtt.sourceforge.net/udp_tracker_protocol.html}
      * @note tracker is not considered to be connected until the udp trackers sends
      *
-     * @param &AnnounceInformation
+     * @param AnnounceInformation $announce_info
      *
+     * @return bool
      */
     private function connectTracker_UDP(AnnounceInformation &$announce_info)
     {
@@ -1562,7 +1583,7 @@ class Daemon
             if (!filter_var($announce_info->address, FILTER_VALIDATE_IP)) {
                 // Can't get ip address, don't bother
                 $msg = "Can't get ip address from tracker {$announce_info->url}";
-                logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
 
                 $announce_info->connection_failed = true;
                 return false;
@@ -1572,7 +1593,7 @@ class Daemon
         if (!isset($url_comp["port"])) {
             // Port is needed
             $msg = "UDP Tracker, {$announce_info->address}, doesn't have a port number.";
-            logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+            Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
 
             $announce_info->connection_failed = true;
             return false;
@@ -1594,7 +1615,7 @@ class Daemon
             while (!($result = @socket_connect($announce_info->resource, $announce_info->address, $port))) {
                 if ((time() - $announce_info->conection_timeout) >= config::TRACKER_CONNECTION_TIMEOUT) {
                     $msg = "Connection to tracker, {$announce_info->url}, timed out.";
-                    logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                    Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
 
                     $announce_info->is_connecting = false;
                     $announce_info->connection_failed = true;
@@ -1629,14 +1650,14 @@ class Daemon
                     socket_close($announce_info->resource);
 
                     $msg = "Tracker, {$announce_info->url}, connect output is wrong.";
-                    logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                    Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
 
                     $announce_info->connection_failed = true;
                     return false;
                 }
 
                 $msg = "Tracker, {$announce_info->url}, connected.";
-                logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
 
                 $announce_info->udp_connect_id = substr($raw_response, 8, 8);
                 $announce_info->is_connected = true;
@@ -1650,7 +1671,7 @@ class Daemon
                     socket_close($announce_info->resource);
 
                     $msg = "Connection to tracker, {$announce_info->url}, timed out.";
-                    logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                    Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
 
                     $announce_info->connection_failed = true;
                     return false;
@@ -1666,9 +1687,10 @@ class Daemon
      * @note for more information check out
      * {http://xbtt.sourceforge.net/udp_tracker_protocol.html}
      *
-     * @param &TorrentInformation
-     * @param &AnnounceInformation
-     * @param $my_port
+     * @param TorrentInformation $torrent_info
+     * @param AnnounceInformation $announce_info
+     * @param int $my_port
+     * @return bool
      */
     private function sendTrackerRequest_UDP(TorrentInformation &$torrent_info, AnnounceInformation &$announce_info, $my_port)
     {
@@ -1709,9 +1731,11 @@ class Daemon
      * @note for more information check out
      * {http://xbtt.sourceforge.net/udp_tracker_protocol.html}
      *
-     * @param &TorrentInformation
-     * @param &AnnounceInformation
-     * @param $my_port
+     * @param AnnounceInformation $announce_info
+     * @return array|bool
+     * @internal param $TorrentInformation
+     * @internal param $AnnounceInformation
+     * @internal param $my_port
      */
     private function recieveTrackerResponse_UDP(AnnounceInformation &$announce_info)
     {
@@ -1754,7 +1778,7 @@ class Daemon
                 // error
                 $error_msg = strstr($raw_response, 8);
                 $msg = "Error getting response from {$announce_info->url}, with message: $error_msg.";
-                logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
+                Logger::logMessage(self::PROGRAM_NAME, Logger::DEBUG, $msg);
                 $announce_info->bad_response = true;
                 return false;
 
@@ -1773,8 +1797,7 @@ class Daemon
      *
      * @param $info_hash
      * @param $socket
-     * @param $raw_input False for 40byte hex, True for 20byte binary
-     *
+     * @internal param $raw_input for 40byte hex, True for 20byte binary
      */
     private function sendHandShake($info_hash, $socket)
     {
@@ -1802,7 +1825,7 @@ class Daemon
      * depending on the situation.
      *
      * @param $socket
-     * @returns False if failed or the PeerInfomation object if success
+     * @returns bool|PeerInformation False if failed or the PeerInfomation object if success
      */
     private function recieveHandShake($socket)
     {
@@ -1848,7 +1871,9 @@ class Daemon
     //------
 
     /**
-     *
+     * @param PeerInformation $peer_info
+     * @param int $length
+     * @return bool|string
      */
     private function bufferRead(PeerInformation &$peer_info, $length)
     {
@@ -1871,6 +1896,9 @@ class Daemon
 
     /**
      * @deprecated
+     * @param PeerInformation $peer_info
+     * @param int $length
+     * @return bool|string
      */
     private function socketRead(PeerInformation &$peer_info, $length)
     {
@@ -1898,7 +1926,9 @@ class Daemon
     }
 
     /**
-     *
+     * @param PeerInformation $peer_info
+     * @param * $data
+     * @param int $length
      */
     private function socketWrite(PeerInformation &$peer_info, $data, $length = 0)
     {
@@ -1926,6 +1956,7 @@ class Daemon
 
     /**
      * Send Keep alive.
+     * @param PeerInformation $peer_info
      */
     private function messageKeepAlive(PeerInformation &$peer_info)
     {
@@ -1935,6 +1966,7 @@ class Daemon
 
     /**
      * Send choke.
+     * @param $socket
      */
     private function messageChoke($socket)
     {
@@ -1943,6 +1975,7 @@ class Daemon
 
     /**
      * Send unchoke.
+     * @param $socket
      */
     private function messageUnChoke($socket)
     {
@@ -1951,6 +1984,7 @@ class Daemon
 
     /**
      * Send Interested.
+     * @param PeerInformation $peer_info
      */
     private function messageInterested(PeerInformation &$peer_info)
     {
@@ -1960,6 +1994,7 @@ class Daemon
 
     /**
      * Send Interested.
+     * @param $socket
      */
     private function messageNotInterested($socket)
     {
@@ -1969,6 +2004,8 @@ class Daemon
 
     /**
      * have.
+     * @param PeerInformation $peer_info
+     * @param $index
      */
     private function messageHave(PeerInformation &$peer_info, $index)
     {
@@ -1979,6 +2016,8 @@ class Daemon
 
     /**
      * Send bitfield
+     * @param $socket
+     * @param $bitfield
      */
     private function messageBitfield($socket, $bitfield)
     {
@@ -1993,7 +2032,10 @@ class Daemon
     /**
      * Request a piece from the peer
      *
-     * @returns the piece
+     * @param PeerInformation $peer_info
+     * @param $index
+     * @param $begin
+     * @param $piece_length
      */
     private function messageRequest(PeerInformation &$peer_info, $index, $begin, $piece_length)
     {
@@ -2005,7 +2047,10 @@ class Daemon
     /**
      * Request a piece from the peer
      *
-     * @returns the piece
+     * @param $socket
+     * @param $index
+     * @param $begin
+     * @param $block
      */
     private function messagePiece($socket, $index, $begin, $block)
     {
@@ -2018,16 +2063,3 @@ class Daemon
 
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
