@@ -207,7 +207,7 @@ class Config
      * @note example: "php /path/to/command"
      * @var string
      */
-    const TORRENT_COMPETION_NOTIFICATION_SCRIPT = "";
+    const TORRENT_COMPLETION_NOTIFICATION_SCRIPT = "";
 
 
     /* ----- Peer ----- */
