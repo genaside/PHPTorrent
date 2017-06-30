@@ -22,6 +22,6 @@ version 0.0.02 alpha
 - According to specs, peers that has the resrved bits filled, they get diconnected.
   That feature has been added.
 - Fixed the problem where one peer is working while others stall.
-- fixed logger, amd all echo are replaced with logger.
+- fixed Logger, amd all echo are replaced with Logger.
 - Added a feature that a user can set up scripts for when the torrent finishes.
 - Other
